@@ -1,0 +1,26 @@
+[build-system]
+requires = ['pip>=20.3']
+build-backend = 'setuptools.buildmeta'
+
+[project]
+name = 'Kaleido'
+description = 'Deep learning framework written purely in Python with minimal dependency'
+keywords = ['Deep Learning', 'Neural Network']
+license = {text = 'MIT'}
+authors = [{name = 'FedDragon1'}]
+classifiers = ['Operating System :: OS Independent',
+               'Programming Language :: Python :: 3',
+               'Programming Language :: Python :: 3 :: Only',
+               'Programming Language :: Python :: 3.10',
+               'Programming Language :: Python :: 3.11',
+               'Programming Language :: Python :: Implementation :: Cpython']
+requires-python = '>=3.10'
+dependencies = ['rich>=13.3.5', 'numpy>=1.25.0']
+dynamic = ['version']
+
+[project.readme]
+file = 'README.md'
+content-type = 'text/markdown'
+
+[project.urls]
+'Source Code' = 'https://github.com/FedDragon1/Kaleido'

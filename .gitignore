@@ -3,6 +3,10 @@ main.py
 dataset/
 
 # in development
-conv/
+conv/conv1d.py
+conv/conv2d.py
+
 
 .idea/
+
+__pycache__/

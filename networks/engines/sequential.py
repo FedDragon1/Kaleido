@@ -17,10 +17,10 @@ from ..util import (
     array_to_tuple,
     assert_isinstance,
     assert_notinstance,
-    assert_ndim,
+    assert_max_ndim,
     to_array_with_type,
     batches,
-    assert_not_empty,
+    assert_not_empty, assert_built,
 )
 
 
@@ -134,7 +134,7 @@ class Sequential:
             )
 
             # shape should only be a vector or scaler, not n-d array
-            assert_ndim(
+            assert_max_ndim(
                 input_shape,
                 1,
                 f"Argument `input_shape` {input_shape} should be 1d vector or 0d scaler, "
@@ -166,7 +166,8 @@ class Sequential:
 
         # primer
         x_in = np.random.random(self._input_shape)
-        self.forward(x_in)
+        x_out = self.forward(x_in)
+        self._output_shape = self.layers[-1].output_shape
 
         # sanity check
         assert_isinstance(
@@ -218,13 +219,18 @@ class Sequential:
 
     @property
     def input_shape(self):
-        self.built_check()
+        assert_built(self, "Model not built, please build the model first")
         # Always pass a new array
         return self._input_shape.copy()
 
+    @property
+    def output_shape(self):
+        assert_built(self, "Model not built, please build the model first")
+        return self._output_shape.copy()
+
     @cached_property
     def total_params(self):
-        self.built_check()
+        assert_built(self, "Model not built, please build the model first")
         total_params = 0
         for layer in self.layers:
             total_params += layer.n_param
@@ -248,12 +254,8 @@ class Sequential:
         }
         return histories
 
-    def built_check(self):
-        if not self.built:
-            raise TypeError("Model not built, please build the model first")
-
     def summary(self):
-        self.built_check()
+        assert_built(self, "Model not built, please build the model first")
 
         layer_summaries = []
 

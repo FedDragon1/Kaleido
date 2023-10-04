@@ -2,7 +2,7 @@ import numpy as np
 
 from networks.layers.core.base_layers import Layer
 
-from networks.util import assert_ndim, assert_valid_output_shape
+from networks.util import assert_max_ndim, assert_valid_output_shape
 
 
 class Dense(Layer):
@@ -37,7 +37,7 @@ class Dense(Layer):
         }
 
     def build_parameters(self, neurons):
-        assert_ndim(neurons, 1, f"Expected vector input from {self}, got {neurons=}")
+        assert_max_ndim(neurons, 1, f"Expected vector input from {self}, got {neurons=}")
 
         self.input_shape = np.asarray(len(neurons))
         # n -> m, m rows n column weights
@@ -60,8 +60,8 @@ class Dense(Layer):
         weights:
             ∂z[j]/∂w[j][k] = ∂[w[j][1] * a[1] + w[j][2] * a[2] + ... + w[j][k] * a[k] + ... + b[j]] / ∂w[j][k]
                            = a[k]
-            ∂C/∂w[j][k] = ∂z[j]/∂w[j][k] * ∂C/∂z[j]
-                        = a[k] * grad[j]
+            ∂C/∂w[j][k] = ∂C/∂z[j] * ∂z[j]/∂w[j][k]
+                        = grad[j] * a[k]
             ∂C/∂w = [a[k] * grad[j] for k] for j      ** k->col & j->row **
                   = ⎡g[1]*a[1] g[1]*a[2] ... g[1]*a[k]⎤
                     ⎥g[2]*a[1] g[2]*a[2] ... g[1]*a[k]⎥
@@ -77,7 +77,7 @@ class Dense(Layer):
             ∂C/∂b = grad
 
         inputs:
-            ∂z/∂a = J(z)^T
+            ∂z/∂a = J(z)
                   = ⎡∂z[1]/∂a[1] ∂z[1]/∂a[2] ... ∂z[1]/∂a[k]⎤
                     ⎥∂z[2]/∂a[1] ∂z[2]/∂a[2] ... ∂z[2]/∂a[k]⎥
                     ⎥     ⋮           ⋮       ⋱       ⋮     ⎥
