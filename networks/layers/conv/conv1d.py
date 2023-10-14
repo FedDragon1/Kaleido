@@ -8,9 +8,25 @@ from ...util import assert_positive_int, assert_str, assert_ndim, assert_valid_s
 
 
 class Conv1D(Layer):
+    """
+    1D convolution layer, temporal convolution.
+
+    This layer creates a convolution kernel that convolve 2d array over
+    temporal dimension.
+    """
+
     def __init__(self, kernel_count, kernel_size, stride=1, padding="valid"):
+        """
+        Creates a 1D convolutional layer.
+
+        :param kernel_count: positive integer, second axis of output
+        :param kernel_size: positive integer, the temporal span of kernel
+        :param stride: positive integer, steps to skip after each operation
+        :param padding: "valid" / "same" / "full"
+        """
         self.kernel_size = assert_valid_kernel_size(
             kernel_size,
+            1,
             f"{type(self).__qualname__}: kernel size must be positive integer, got {kernel_size}",
         )
         self.kernel_count = assert_positive_int(
@@ -24,7 +40,7 @@ class Conv1D(Layer):
             padding,
             f"{type(self).__qualname__}: padding argument must be string, got {padding} of class {padding.__class__}",
         )
-        self.padding = Padding(padding, padding + "1D")
+        self.padding = Padding(padding, padding + "1D", self.kernel_size, self.stride)
 
         super().__init__(None)  # not known until build
 
@@ -36,19 +52,20 @@ class Conv1D(Layer):
         )
         self.input_shape = np.asarray(neurons.shape)
 
-        # TODO: Change this to (k_size, num_channels, num_filter)
-        # shape = (num_filter, k_size, num_channels)
+        # (k_size, num_channels, num_filter)
         self.weights = np.random.random(
-            (self.kernel_count, self.kernel_size, self.input_shape[-1])
+            (self.kernel_size, self.input_shape[-1], self.kernel_count)
         )
         self.biases = np.zeros((self.kernel_count,))
-        self.padding.build(neurons, self.kernel_size, self.stride)
+        self.padding.build(neurons, )
 
         self.output_shape = np.asarray(self.get_output(neurons).shape)
         self.built = True
 
     def get_output(self, neurons):
         """
+        # TODO: Change documentation
+
         Convolve the input and return in the shape (output_length, num_kernel)
 
         One way to think about this approach is to use sliding window analogy.
@@ -103,16 +120,13 @@ class Conv1D(Layer):
         :param neurons: Exactly 2d array that have shape representing (sequence_length (L), #channel (N))
         :return: convolved neurons shape (seq_len, kernel_n)
         """
-        neurons = self.padding.process(neurons)
+        neurons = self.padding.pad(neurons)
+        x_slices = self.padding.slices()
         self.conv_segments = np.array(
-            [neurons[_slice] for _slice in self.padding.slices()]
+            [neurons[x_slice] for x_slice in x_slices()]
         )
-        output = np.array(
-            [
-                np.sum(_slice * self.weights, axis=(1, 2)) + self.biases
-                for _slice in self.conv_segments
-            ]
-        )
+
+        output = np.einsum("ijk, jkl -> il", self.conv_segments, self.weights) + self.biases
         return output
 
     def backprop(self, gradients):
@@ -120,101 +134,51 @@ class Conv1D(Layer):
         Backpropagation for **this given data**
         Optimizers will handle the batch, this method should only be used internally
 
-        keymap:
-            i -> output index
-            f -> kernel (filter) index
-            r -> input row
-            c -> input channel
-            j -> weight row
-            k -> weight column
-            s -> conv_segments
-            L -> output sequence length
-            N -> num kernel
-            F -> num filter
-            s[i].shape == w[f].shape
+        # TODO: Add documentation
+        # TODO: Add tests for this
 
-        target function (index starts at 1):
-            z[i][f] = sum(w[f] * s[i]) + b[f]
-
-        weights:
-            ∂z[i][f]/∂w[f][j][k]
-                  (only look at row `j` since all other rows does not contain this variable targeted)
-                = ∂[w[f][j][1] * s[i][j][1] + w[f][j][2] * s[i][j][2]
-                        + ... + w[f][j][k] * s[i][j][k] + ... + b[f]] / ∂w[f][j][k]
-                = s[i][j][k]
-            ∂z[:, f]/∂w[f][j][k]
-                  (differentiate for all z[1][f], z[2][f], ... z[L][f])
-                  ⎡s[1][j][k]⎤
-                = ⎥s[2][j][k]⎥
-                  ⎥     ⋮    ⎥
-                  ⎣s[L][j][k]⎦
-            ∂C/∂w[f][j][k] = ∂C/∂z * ∂z/∂w[f][j][k]
-                             (other filters are not relevant to this specific weight)
-                           = ∂C/∂z[:, f] · ∂z[:, f]/∂w[f][j][k]
-                           = grad[:, f] · s[:, j, k]
-            ∂C/∂w[f] = ∂C/∂z * ∂z/∂w[f]
-                     = ⎡grad[:, f]·s[:, j, k]  grad[:, f]·s[:, j, k]  ...  grad[:, f]·s[:, j, k]⎤
-                       ⎥grad[:, f]·s[:, j, k]  grad[:, f]·s[:, j, k]  ...  grad[:, f]·s[:, j, k]⎥
-                       ⎥          ⋮                      ⋮             ⋱             ⋮          ⎥
-                       ⎣grad[:, f]·s[:, j, k]  grad[:, f]·s[:, j, k]  ...  grad[:, f]·s[:, j, k]⎦
-                       (for broadcasting, create 2 new axes and take transpose)
-                     = sum(∂C/∂z[:, f][None, None].T * ∂z[:, f]/∂w[f], axis=0)
-                     = sum(grad[:, f][None, None].T * s, axis=0)
-            ∂C/∂w = sum(grad[:, f][None, None].T * s, axis=0) for f in N
-
-        biases:
-            ∂z[i][f]/∂b[f]
-                = ∂[w[f][0][1] * s[i][0][1] + w[f][0][2] * s[i][0][2]
-                        + ... + w[f][j][k] * s[i][j][k] + ... + b[f]] / ∂b[f]
-                = 1
-            ∂z[:, f]/∂b[f] = <1, 1, 1, 1, 1, ..., 1> len L
-            ∂C/∂b[f] = ∂C/∂z[:, f] · ∂z[:, f]/∂b[f]
-                     = sum(grad[:, f])
-            ∂C/∂b = sum(grad, axis=0)
-
-        inputs:
-            ∂z/∂a[r][c]
-                  (slide the reversed weight transpose across a zero matrix from top to bottom)
-                  (the dimension of zero matrix is (no_stride_length, F), where)
-                  (no_stride_length = L + stride * (L - 1), then take only the rows mod stride equals 0)
-                = w.T[r, ::-1, :]
-                = ⎡w[1][1][1] w[2][1][1] ... w[F][1][1]⎤
-                  ⎥     0          0     ...      0    ⎥
-                  ⎥     ⋮          ⋮      ⋱       ⋮    ⎥
-                  ⎣     0          0     ...      0    ⎦
-            ∂C/∂a[r][c] = sum(∂C/∂z * ∂z/∂a[r][c])
-            ∂C/∂a = sum(∂C/∂z * ∂z/∂a, axis=(2, 3))
-                  = sum(grad * ∂z/∂a, axis=(2, 3))
-
-        :param gradients: gradients from next layer (usually local gradient from activation fn)
-        :return: ({"weights": ∇weights, "biases": ∇biases},  ∇neurons)
+        :param gradients:
+        :return:
         """
-        nabla_w = np.array(
-            [
-                np.sum(gradients[:, f][None, None].T * self.conv_segments, axis=0)
-                for f in range(self.kernel_count)
-            ]
-        )
+
+        # A mimic of dot product for higher order tensors.
+        # Notice that `conv_segments` is the Jacobian of output
+        # w.r.t one filter of weights. It has to be transposed
+        # in order to join calculation. This idea of transposing
+        # is captured in einsum.
+        nabla_w = np.einsum("ijk, ik -> jk", self.conv_segments, gradients)
+
+        # Notice now `nabla_w` is only one of the Jacobians for one
+        # filter. However, all the filters share the same Jacobian.
+        # Instead of stacking the same array, create a new axis,
+        # as numpy will broadcast the arrays.
+        nabla_w = nabla_w[:, :, None]
 
         nabla_b = np.sum(gradients, axis=0)
 
-        no_stride_length = self.output_shape[0] + (self.stride - 1) * (self.output_shape[0] - 1)
-        dzda = np.zeros((*self.input_shape, *self.output_shape))
-        # generate the matrices
-        for nrow in range(self.input_shape[0]):
-            for ncol in range(self.input_shape[1]):
-                rotated_weights = self.weights.T[ncol, ::-1]
-                matrix = np.zeros((no_stride_length, self.kernel_count))
-                # put weights on zero matrix, shift down by nrow columns
-                start_index = max(0, nrow - len(rotated_weights) + 1)
-                end_index = nrow + 1
-                weights_fit = end_index - start_index
-                matrix[start_index: end_index] = rotated_weights[-weights_fit:]
-                # take only stride compatible elements
-                matrix = matrix[::self.stride]
-                print(matrix)
-                dzda[nrow][ncol] = matrix
-        nabla_a = np.sum(gradients * dzda, axis=(2, 3))
+        dzda = self.get_dzda_tensor()
+        # i -> output length
+        # j -> input length
+        # k -> input channels
+        # l -> kernel_count
+        nabla_a = np.einsum("ijkl, il -> jk", dzda, gradients)
+
+        # remove 0 paddings
+        nabla_a = self.padding.unpad(nabla_a)
 
         trainable = {"weights": nabla_w, "biases": nabla_b}
         return trainable, nabla_a
+
+    def get_dzda_tensor(self):
+        """
+        Generates a 4D array `(output_len, input_len, num_channels, kernel_count)`
+        that is used internally to calculate the gradient w.r.t the input neurons.
+
+        :return: 4d array (output_len, input_len, num_channels, kernel_count)
+        """
+        dzda = np.zeros((self.output_shape[0], *self.input_shape, self.kernel_count))
+
+        for output_n, x_slice in enumerate(self.padding.slices()):
+            dzda[output_n, x_slice] = self.weights
+
+        return dzda

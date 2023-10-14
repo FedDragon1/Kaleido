@@ -6,10 +6,50 @@ import numpy as np
 from ...util import SubclassDispatcherMeta, assert_built
 
 
+def unpad1d(self, padded_data):
+    """
+    Unpads the padded 2d array.
+
+    :param padded_data: array from `pad`
+    :return: unpadded 2d array
+    """
+    assert_built(self, "Padding not built. Please build this padding first")
+
+    (x_slice,) = self.position
+    return padded_data[x_slice]
+
+
+def unpad2d(self, padded_data):
+    """
+    Unpads the padded 3d array.
+
+    :param padded_data: array from `pad`
+    :return: unpadded 3d array
+    """
+    assert_built(self, "Padding not built. Please build this padding first")
+
+    x_slice, y_slice = self.position
+    return padded_data[y_slice, x_slice]
+
+
+def unpad3d(self, padded_data):
+    """
+    Unpads the padded 4d array.
+
+    :param padded_data: array from `pad`
+    :return: unpadded 4d array
+    """
+    assert_built(self, "Padding not built. Please build this padding first")
+
+    x_slice, y_slice, z_slice = self.position
+    return padded_data[z_slice, y_slice, x_slice]
+
+
 def slices1d(self):
     """
     Function returning 1 generator, producing slices along x-axis.
     Built this way to match the signature with other slices.
+
     :return: x_slices_generator -> slice
     """
     assert_built(self, "Padding not built. Please build this padding first")
@@ -27,6 +67,7 @@ def slices2d(self):
     """
     Function returning 2 generators, producing slices
     on x and y axes respectively.
+
     :return: x_slices_generator -> slice, y_slices_generator -> slice
     """
     assert_built(self, "Padding not built. Please build this padding first")
@@ -46,13 +87,13 @@ def slices3d(self):
     """
     Same as slices2d but produces slices on
     x, y, and z axes respectively.
+
     :return: (
         x_slices_generator -> slice,
         y_slices_generator -> slice,
         z_slices_generator -> slice
     )
     """
-
     assert_built(self, "Padding not built. Please build this padding first")
 
     def x_slices_generator():
@@ -84,12 +125,13 @@ class Padding(metaclass=SubclassDispatcherMeta):
         for convolution kernels.
 
         All attributes of a padding object:
-            - `kernel_size`    Sequence[n]
-            - `stride`         Sequence[n]
-            - `built`          bool
-            - `start`          np.zeros[n]      REQUIRES BUILD
-            - `end`            np.ndarray[n]    REQUIRES BUILD
-            - additional attributes specific to padding
+            - `kernel_size`     Sequence[n]
+            - `stride`          Sequence[n]
+            - `built`           bool
+            - `start`           np.zeros[n]      REQUIRES BUILD
+            - `end`             np.ndarray[n]    REQUIRES BUILD
+            - `processed_shape` tuple[int]       REQUIRES BUILD
+            - `position`        tuple[slice]     REQUIRES BUILD
         Note: `[n]` means length of `n`.
 
         The purpose of making initialization in 2 stages is to
@@ -115,7 +157,7 @@ class Padding(metaclass=SubclassDispatcherMeta):
             return f"<{self.__class__.__qualname__}() NOT BUILT>"
         return f"<{self.__class__.__qualname__}()>"
 
-    def build(self, data):
+    def build(self, raw_data):
         """
         Builds the padding layer.
 
@@ -133,11 +175,11 @@ class Padding(metaclass=SubclassDispatcherMeta):
         attributes. Always call this method in the end of
         customization.
 
-        :param data: neurons
+        :param raw_data: neurons
         :return: None
         """
 
-        data = self.process(data)
+        data = self.pad(raw_data)
         dimension = data.ndim - 1
 
         # first starting index of convolution, always 0 vector
@@ -163,7 +205,12 @@ class Padding(metaclass=SubclassDispatcherMeta):
         self.built = True
 
     @abstractmethod
-    def process(self, data):
+    def unpad(self, padded_data):
+        """Undo the pad, returning original data"""
+        ...
+
+    @abstractmethod
+    def pad(self, raw_data):
         """Process the data and return padded data"""
         ...
 
@@ -185,16 +232,16 @@ class Full1D(Full):
     for all the channels.
     """
 
-    def build(self, data):
+    def build(self, raw_data):
         """
         Adds a `processed_shape` attribute for creating zero
         array with correct shape, as well as `position` indicating
         where to put the original array in the new array.
 
-        :param data: unprocessed data
+        :param raw_data: unprocessed data
         :return: None
         """
-        length, num_channel = data.shape
+        length, num_channel = raw_data.shape
         left_padding = self.kernel_size - 1
 
         left_padding_len = length + left_padding
@@ -211,9 +258,9 @@ class Full1D(Full):
         self.processed_shape = (desired_len, num_channel)
         self.position = (slice(left_padding, left_padding + length),)
 
-        super().build(data)
+        super().build(raw_data)
 
-    def process(self, data):
+    def pad(self, raw_data):
         """
         Examples:
             array:      [A B C D E F G]
@@ -226,16 +273,18 @@ class Full1D(Full):
             stride:     2
             processed:  [0 0 A B C D E F G H 0]
 
-        :param data: unprocessed 2D tensor (time, #channel)
+        :param raw_data: unprocessed 2D tensor (time, #channel)
         :return: 0 padded array
         """
         processed = np.zeros(self.processed_shape)
         # all channels
         (x_slice,) = self.position
-        processed[x_slice, :] = data
+        processed[x_slice, :] = raw_data
         return processed
 
     slices = slices1d
+
+    unpad = unpad1d
 
 
 class Full2D(Full):
@@ -244,7 +293,7 @@ class Full2D(Full):
     Expects a 3D array input (y, x, channel)
     """
 
-    def build(self, data):
+    def build(self, raw_data):
         """
         Adds a `processed_shape` attribute for creating zero
         array with correct shape, as well as `position` indicating
@@ -253,10 +302,10 @@ class Full2D(Full):
         Notice that `position` will be a tuple since there are
         2 slices in y-axis and x-axis respectively
 
-        :param data: unprocessed data (3D tensor)
+        :param raw_data: unprocessed data (3D tensor)
         :return: None
         """
-        *size, num_channel = data.shape
+        *size, num_channel = raw_data.shape
         size = np.array(size)
 
         # requires kernel_size to be ndarray
@@ -288,9 +337,9 @@ class Full2D(Full):
             slice(top_left_padding[0], top_left_padding[0] + size[0]),
         )
 
-        super().build(data)
+        super().build(raw_data)
 
-    def process(self, data):
+    def pad(self, raw_data):
         """
         Examples:
             array:      [[A B C D]
@@ -325,21 +374,23 @@ class Full2D(Full):
                          [0 0 I J K L 0]
                          [0 0 M N O P 0]]
 
-        :param data: unprocessed 3D tensor (#y, #x, #channel)
+        :param raw_data: unprocessed 3D tensor (#y, #x, #channel)
         :return: 0 padded array
         """
 
         processed = np.zeros(self.processed_shape)
         x_slice, y_slice = self.position
         # all channels
-        processed[y_slice, x_slice, :] = data
+        processed[y_slice, x_slice, :] = raw_data
         return processed
 
     slices = slices2d
 
+    unpad = unpad2d
+
 
 class Full3D(Full):
-    def build(self, data):
+    def build(self, raw_data):
         """
         Adds a `processed_shape` attribute for creating zero
         array with correct shape, as well as `position` indicating
@@ -348,10 +399,10 @@ class Full3D(Full):
         Notice that `position` will be a tuple since there are
         3 slices in z-axis, y-axis and x-axis respectively
 
-        :param data: unprocessed data (4D tensor)
+        :param raw_data: unprocessed data (4D tensor)
         :return: None
         """
-        *size, num_channel = data.shape
+        *size, num_channel = raw_data.shape
         size = np.array(size)
 
         # requires kernel_size to be ndarray
@@ -389,9 +440,9 @@ class Full3D(Full):
             slice(base_padding[0], base_padding[0] + size[0]),
         )
 
-        super().build(data)
+        super().build(raw_data)
 
-    def process(self, data):
+    def pad(self, raw_data):
         """
         Example:
             array:      [
@@ -492,17 +543,19 @@ class Full3D(Full):
                           [ 0  0  0  0  0  0  0  0]]
                         ]
 
-        :param data: unprocessed 4D tensor (#z, #y, #x, #channel)
+        :param raw_data: unprocessed 4D tensor (#z, #y, #x, #channel)
         :return: 0 padded array
         """
 
         processed = np.zeros(self.processed_shape)
         x_slice, y_slice, z_slice = self.position
         # all channels
-        processed[z_slice, y_slice, x_slice, :] = data
+        processed[z_slice, y_slice, x_slice, :] = raw_data
         return processed
 
     slices = slices3d
+
+    unpad = unpad3d
 
 
 class Same(Padding):
@@ -517,18 +570,17 @@ class Same(Padding):
 
 
 class Same1D(Same):
-
-    def build(self, data):
+    def build(self, raw_data):
         """
         Adds a `processed_shape` attribute for creating zero
         array with correct shape, as well as `position` indicating
         where to put the original array in the new array.
 
-        :param data: unprocessed data
+        :param raw_data: unprocessed data
         :return: None
         """
 
-        length, num_channel = data.shape
+        length, num_channel = raw_data.shape
 
         output_length = math.ceil(length / self.stride)
         desired_len = (output_length - 1) * self.stride + self.kernel_size
@@ -543,9 +595,9 @@ class Same1D(Same):
         self.processed_shape = (desired_len, num_channel)
         self.position = (slice(left_padding, left_padding + length),)
 
-        super().build(data)
+        super().build(raw_data)
 
-    def process(self, data):
+    def pad(self, raw_data):
         """
         Examples:
             array:      [A B C D E F G]
@@ -558,31 +610,32 @@ class Same1D(Same):
             stride:     2
             processed:  [0 0 A B C D E F G H 0]
 
-        :param data: unprocessed 2D tensor (time, #channel)
+        :param raw_data: unprocessed 2D tensor (time, #channel)
         :return: 0 padded array
         """
         processed = np.zeros(self.processed_shape)
         # all channels
         (x_slice,) = self.position
-        processed[x_slice, :] = data
+        processed[x_slice, :] = raw_data
         return processed
 
     slices = slices1d
 
+    unpad = unpad1d
+
 
 class Same2D(Padding):
-
-    def build(self, data):
+    def build(self, raw_data):
         """
         Adds a `processed_shape` attribute for creating zero
         array with correct shape, as well as `position` indicating
         where to put the original array in the new array.
 
-        :param data: unprocessed data (3D tensor)
+        :param raw_data: unprocessed data (3D tensor)
         :return: None
         """
 
-        *length, num_channel = data.shape
+        *length, num_channel = raw_data.shape
 
         # since no unpacking is needed,
         # length shape -> (#x, #y)
@@ -613,9 +666,9 @@ class Same2D(Padding):
             slice(start_padding[1], start_padding[1] + length[1]),
         )
 
-        super().build(data)
+        super().build(raw_data)
 
-    def process(self, data):
+    def pad(self, raw_data):
         """
         Examples:
             array:      [[A B C D]
@@ -648,32 +701,33 @@ class Same2D(Padding):
                          [0 M N O P]
                          [0 0 0 0 0]]
 
-        :param data: unprocessed 3D tensor (#y, #x, #channel)
+        :param raw_data: unprocessed 3D tensor (#y, #x, #channel)
         :return: 0 padded array
         """
 
         processed = np.zeros(self.processed_shape)
         x_slice, y_slice = self.position
         # all channels
-        processed[y_slice, x_slice, :] = data
+        processed[y_slice, x_slice, :] = raw_data
         return processed
 
     slices = slices2d
 
+    unpad = unpad2d
+
 
 class Same3D(Padding):
-
-    def build(self, data):
+    def build(self, raw_data):
         """
         Adds a `processed_shape` attribute for creating zero
         array with correct shape, as well as `position` indicating
         where to put the original array in the new array.
 
-        :param data: unprocessed data (4D tensor)
+        :param raw_data: unprocessed data (4D tensor)
         :return: None
         """
 
-        *length, num_channel = data.shape
+        *length, num_channel = raw_data.shape
 
         # see same2d for caution
         # length.shape -> (#x, #y, #z)
@@ -696,9 +750,9 @@ class Same3D(Padding):
             slice(start_padding[2], start_padding[2] + length[2]),
         )
 
-        super().build(data)
+        super().build(raw_data)
 
-    def process(self, data):
+    def pad(self, raw_data):
         """
         Example:
             array:      [
@@ -769,34 +823,48 @@ class Same3D(Padding):
                           [ 0  0  0  0  0  0]
                           [ 0  0  0  0  0  0]]]
 
-        :param data: unprocessed 4D tensor (#z, #y, #x, #channel)
+        :param raw_data: unprocessed 4D tensor (#z, #y, #x, #channel)
         :return: 0 padded array
         """
 
         processed = np.zeros(self.processed_shape)
         x_slice, y_slice, z_slice = self.position
         # all channels
-        processed[z_slice, y_slice, x_slice, :] = data
+        processed[z_slice, y_slice, x_slice, :] = raw_data
         return processed
 
     slices = slices3d
+
+    unpad = unpad3d
 
 
 class Valid(Padding):
     """No padding, same as 'valid' in keras"""
 
-    def process(self, data):
+    def build(self, raw_data):
+        self.processed_shape = raw_data.shape
+        # original position
+        self.position = tuple(slice(None) for _ in raw_data.shape)
+        super().build(raw_data)
+
+    def pad(self, raw_data):
         # self.input = self.output = data
-        return data
+        return raw_data
 
 
 class Valid1D(Valid):
     slices = slices1d
 
+    unpad = unpad1d
+
 
 class Valid2D(Valid):
     slices = slices2d
 
+    unpad = unpad2d
+
 
 class Valid3D(Valid):
     slices = slices3d
+
+    unpad = unpad3d

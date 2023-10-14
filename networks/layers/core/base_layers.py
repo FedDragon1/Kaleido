@@ -18,8 +18,8 @@ class Layer(ABC):
         return f"<{self.__class__.__qualname__}() {hex(id(self))} " \
                f"({self.input_shape}->{self.output_shape}) {self.n_param} Params>"
 
-    def __init_subclass__(cls, **kwargs):
-        cls.__call__ = cls.forward
+    def __call__(self, *args, **kwargs):
+        return self.forward(*args, **kwargs)
 
     def forward(self, neurons):
         neurons = np.asarray(neurons)

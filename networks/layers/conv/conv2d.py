@@ -45,7 +45,7 @@ class Conv2D(Layer):
         self.built = True
 
     def get_output(self, neurons):
-        neurons = self.padding.process(neurons)
+        neurons = self.padding.pad(neurons)
 
         
 

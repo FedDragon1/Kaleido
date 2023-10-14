@@ -19,6 +19,25 @@ class TestDense(unittest.TestCase):
         expected = np.dot(dense.weights, input) + dense.biases
         assert_array_equal(expected, output)
 
+    def test_forward_2(self):
+        dense = Dense(10)
+        test_x = np.arange(20)
+
+        dense(test_x)
+
+        # dense.weights = np.ones((10, 20))
+        dense.weights = np.arange(10 * 20).reshape(10, 20)
+
+        output = dense(test_x)
+
+        # dummy_true = np.ones(10) * 10
+        # loss = CrossEntropy()
+        # grad = loss.get_gradient(output, dummy_true)
+
+        # print(loss.get_loss(output, dummy_true))
+
+        print(dense.backprop(np.ones_like(output)))
+
     def test_backward(self):
         dense = Dense(8)
         input = np.random.random(10)
@@ -52,27 +71,33 @@ class TestReshape(unittest.TestCase):
 
 
 class TestConv1D(unittest.TestCase):
-    def test_valid(self):
+    def test_forward(self):
         conv = Conv1D(1, 3, padding="valid")
         test_x = np.array(
             [[0, 0], [3, 6], [4, 7], [5, 8], [1, 2], [4, 5], [2, 0], [0, 1]]
         )
         conv(test_x)
-        conv.weights = np.array([[[1, 0], [0, 1], [2, 0]]])
+        conv.weights = np.array([[[1], [0]], [[0], [1]], [[2], [0]]])
         output = conv(test_x)
         expected = np.array([14, 20, 14, 15, 10, 4]).reshape(6, 1)
 
         assert_array_equal(output, expected)
 
+    def test_forward_2(self):
         conv = Conv1D(2, 2)
         test_x = np.array([0, 3, 4, 5]).reshape(4, 1)
         conv(test_x)
-        conv.weights = np.array([[[1], [2]], [[3], [4]]])
-        test_y = np.array([[6, 12], [11, 25], [14, 32]])
+        # (num_filter, k_size, num_channels)
+        # (2, 2, 1)
+        # (k_size, num_channels, num_filter)
+        # (2, 1, 2)
+        conv.weights = np.array([[[1, 2]], [[3, 4]]])
+        test_y = np.array([[9, 12], [15, 22], [19, 28]])
         output = conv(test_x)
 
         assert_array_equal(output, test_y)
 
+    def test_forward_3(self):
         conv = Conv1D(4, 3, padding="valid")
         test_x = np.array(
             [[0, 0], [3, 6], [4, 7], [5, 8], [1, 2], [4, 5], [2, 0], [0, 1]]
@@ -80,15 +105,90 @@ class TestConv1D(unittest.TestCase):
         conv(test_x)
         conv.weights = np.array(
             [
-                [[1, 0], [1, 2], [3, 2]],
-                [[-3, 0], [-2, 2], [3, 1]],
-                [[1, 0], [1, 2], [3, 2]],
-                [[-3, 0], [-2, 2], [3, 1]],
+                [[1, 0, 1, 2], [3, 2, -3, 0]],
+                [[-2, 2, 3, 1], [1, 0, 1, 2]],
+                [[3, 2, -3, 0], [-2, 2, 3, 1]],
             ]
         )
         output = conv(test_x)
 
-        print(conv.backprop(output))
+        expected = np.array(
+            [
+                [-2, 28, 24, 22],
+                [19, 46, 13, 32],
+                [22, 30, 9, 31],
+                [31, 36, -11, 20],
+                [10, 16, 6, 16],
+                [13, 16, -2, 11],
+            ]
+        )
+
+        assert_array_equal(output, expected)
+
+    def test_forward_4(self):
+        conv = Conv1D(4, 3, padding="same")
+        test_x = np.array(
+            [[0, 0], [3, 6], [4, 7], [5, 8], [1, 2], [4, 5], [2, 0], [0, 1]]
+        )
+        conv(test_x)
+        conv.weights = np.array(
+            [
+                [[1, 0, 1, 2], [3, 2, -3, 0]],
+                [[-2, 2, 3, 1], [1, 0, 1, 2]],
+                [[3, 2, -3, 0], [-2, 2, 3, 1]],
+            ]
+        )
+        output = conv(test_x)
+
+        expected = np.array(
+            [
+                [-3, 18, 9, 6],
+                [-2, 28, 24, 22],
+                [19, 46, 13, 32],
+                [22, 30, 9, 31],
+                [31, 36, -11, 20],
+                [10, 16, 6, 16],
+                [13, 16, -2, 11],
+                [3, 0, 3, 6],
+            ]
+        )
+
+        assert_array_equal(output, expected)
+
+    def test_forward_5(self):
+        conv = Conv1D(4, 3, padding="full")
+        test_x = np.array(
+            [[0, 0], [3, 6], [4, 7], [5, 8], [1, 2], [4, 5], [2, 0], [0, 1]]
+        )
+        conv(test_x)
+        conv.weights = np.array(
+            [
+                [[1, 0, 1, 2], [3, 2, -3, 0]],
+                [[-2, 2, 3, 1], [1, 0, 1, 2]],
+                [[3, 2, -3, 0], [-2, 2, 3, 1]],
+            ]
+        )
+        output = conv(test_x)
+
+        expected = np.array(
+            [
+                [0, 0, 0, 0],
+                [-3, 18, 9, 6],
+                [-2, 28, 24, 22],
+                [19, 46, 13, 32],
+                [22, 30, 9, 31],
+                [31, 36, -11, 20],
+                [10, 16, 6, 16],
+                [13, 16, -2, 11],
+                [3, 0, 3, 6],
+                [3, 2, -3, 0],
+            ]
+        )
+
+        assert_array_equal(output, expected)
+
+    def test_backpropagation(self):
+        ...
 
 
 class TestValid1D(unittest.TestCase):
@@ -107,7 +207,7 @@ class TestValid1D(unittest.TestCase):
         valid.build(np.zeros((6, 2)))
 
         in_array = np.zeros((6, 2))
-        processed = valid.process(np.zeros((6, 2)))
+        processed = valid.pad(np.zeros((6, 2)))
 
         assert_array_equal(in_array, processed)
 
@@ -121,7 +221,7 @@ class TestValid1D(unittest.TestCase):
         valid.build(np.zeros((6, 2)))
 
         in_array = np.zeros((6, 2))
-        processed = valid.process(in_array)
+        processed = valid.pad(in_array)
 
         for i, _slice in enumerate(valid.slices()()):
             assert_array_equal(processed[_slice], processed[i * 2 : i * 2 + 3])
@@ -647,7 +747,7 @@ class TestValid3D(unittest.TestCase):
                             ],
                         ],
                     ],
-                ]
+                ],
             ]
         )
 
@@ -667,7 +767,6 @@ class TestValid3D(unittest.TestCase):
 
 
 class TestFull1D(unittest.TestCase):
-
     def test_full1d(self):
         from networks.layers.conv.paddings import Full1D
 
@@ -676,19 +775,14 @@ class TestFull1D(unittest.TestCase):
 
         full = Full1D(kernel_size, stride)
 
-        input_array = np.array([[1, 2],
-                                [3, 4],
-                                [5, 6]])
-        expected = np.array([[0, 0],
-                             [0, 0],
-                             [1, 2],
-                             [3, 4],
-                             [5, 6],
-                             [0, 0],
-                             [0, 0]])
+        input_array = np.array([[1, 2], [3, 4], [5, 6]])
+        expected = np.array([[0, 0], [0, 0], [1, 2], [3, 4], [5, 6], [0, 0], [0, 0]])
         full.build(input_array)
-        processed = full.process(input_array)
+        processed = full.pad(input_array)
         assert_array_equal(expected, processed)
+
+        unpadded = full.unpad(processed)
+        assert_array_equal(input_array, unpadded)
 
     def test_full1d_stride(self):
         from networks.layers.conv.paddings import Full1D
@@ -698,29 +792,14 @@ class TestFull1D(unittest.TestCase):
 
         full = Full1D(kernel_size, stride)
 
-        input_array = np.array([[1, 2],
-                                [3, 4],
-                                [5, 6]])
-        expected = np.array([[0, 0],
-                             [0, 0],
-                             [1, 2],
-                             [3, 4],
-                             [5, 6]])
+        input_array = np.array([[1, 2], [3, 4], [5, 6]])
+        expected = np.array([[0, 0], [0, 0], [1, 2], [3, 4], [5, 6]])
         full.build(input_array)
-        processed = full.process(input_array)
+        processed = full.pad(input_array)
         print(processed)
         assert_array_equal(expected, processed)
 
-        slice_expected = np.array(
-            [
-                [[0, 0],
-                 [0, 0],
-                 [1, 2]],
-                [[1, 2],
-                 [3, 4],
-                 [5, 6]]
-            ]
-        )
+        slice_expected = np.array([[[0, 0], [0, 0], [1, 2]], [[1, 2], [3, 4], [5, 6]]])
 
         sliced = np.array(list(processed[x_slice] for x_slice in full.slices()()))
         assert_array_equal(sliced, slice_expected)
@@ -733,16 +812,10 @@ class TestFull1D(unittest.TestCase):
 
         full = Full1D(kernel_size, stride)
 
-        input_array = np.array([[1, 2],
-                                [3, 4],
-                                [5, 6]])
-        expected = np.array([[0, 0],
-                             [1, 2],
-                             [3, 4],
-                             [5, 6],
-                             [0, 0]])
+        input_array = np.array([[1, 2], [3, 4], [5, 6]])
+        expected = np.array([[0, 0], [1, 2], [3, 4], [5, 6], [0, 0]])
         full.build(input_array)
-        processed = full.process(input_array)
+        processed = full.pad(input_array)
         print(processed)
         assert_array_equal(expected, processed)
 
@@ -776,7 +849,7 @@ class TestFull2D(unittest.TestCase):
             ]
         )
         full.build(input_array)
-        processed = full.process(input_array)
+        processed = full.pad(input_array)
         assert_array_equal(expected, processed)
 
         x_slices, y_slices = full.slices()
@@ -784,6 +857,9 @@ class TestFull2D(unittest.TestCase):
         for y_slice in y_slices():
             for x_slice in x_slices():
                 print(processed[y_slice, x_slice, :])
+
+        unpadded = full.unpad(expected)
+        assert_array_equal(input_array, unpadded)
 
     def test_full2d_stride(self):
         from networks.layers.conv.paddings import Full2D
@@ -814,7 +890,7 @@ class TestFull2D(unittest.TestCase):
             ]
         )
         full.build(input_array)
-        processed = full.process(input_array)
+        processed = full.pad(input_array)
         assert_array_equal(expected, processed)
 
     def test_full2d_stride_2(self):
@@ -845,7 +921,7 @@ class TestFull2D(unittest.TestCase):
             ]
         )
         full.build(input_array)
-        processed = full.process(input_array)
+        processed = full.pad(input_array)
         assert_array_equal(expected, processed)
 
     def test_full2d_stride_3(self):
@@ -874,7 +950,7 @@ class TestFull2D(unittest.TestCase):
             ]
         )
         full.build(input_array)
-        processed = full.process(input_array)
+        processed = full.pad(input_array)
         assert_array_equal(expected, processed)
 
     def test_full2d_kernel_size(self):
@@ -902,7 +978,7 @@ class TestFull2D(unittest.TestCase):
             ]
         )
         full.build(input_array)
-        processed = full.process(input_array)
+        processed = full.pad(input_array)
         assert_array_equal(expected, processed)
 
 
@@ -917,94 +993,118 @@ class TestFull3D(unittest.TestCase):
 
         input_array = np.array(
             [
-                [[[6], [6], [6], [6]],
-                 [[6], [6], [6], [6]],
-                 [[6], [6], [6], [6]],
-                 [[6], [6], [6], [6]]],
-                [[[6], [6], [6], [6]],
-                 [[6], [6], [6], [6]],
-                 [[6], [6], [6], [6]],
-                 [[6], [6], [6], [6]]],
-                [[[6], [6], [6], [6]],
-                 [[6], [6], [6], [6]],
-                 [[6], [6], [6], [6]],
-                 [[6], [6], [6], [6]]],
-                [[[6], [6], [6], [6]],
-                 [[6], [6], [6], [6]],
-                 [[6], [6], [6], [6]],
-                 [[6], [6], [6], [6]]],
+                [
+                    [[6], [6], [6], [6]],
+                    [[6], [6], [6], [6]],
+                    [[6], [6], [6], [6]],
+                    [[6], [6], [6], [6]],
+                ],
+                [
+                    [[6], [6], [6], [6]],
+                    [[6], [6], [6], [6]],
+                    [[6], [6], [6], [6]],
+                    [[6], [6], [6], [6]],
+                ],
+                [
+                    [[6], [6], [6], [6]],
+                    [[6], [6], [6], [6]],
+                    [[6], [6], [6], [6]],
+                    [[6], [6], [6], [6]],
+                ],
+                [
+                    [[6], [6], [6], [6]],
+                    [[6], [6], [6], [6]],
+                    [[6], [6], [6], [6]],
+                    [[6], [6], [6], [6]],
+                ],
             ]
         )
         expected = np.array(
             [
-                [[[0], [0], [0], [0], [0], [0], [0], [0]],
-                 [[0], [0], [0], [0], [0], [0], [0], [0]],
-                 [[0], [0], [0], [0], [0], [0], [0], [0]],
-                 [[0], [0], [0], [0], [0], [0], [0], [0]],
-                 [[0], [0], [0], [0], [0], [0], [0], [0]],
-                 [[0], [0], [0], [0], [0], [0], [0], [0]],
-                 [[0], [0], [0], [0], [0], [0], [0], [0]],
-                 [[0], [0], [0], [0], [0], [0], [0], [0]]],
-                [[[0], [0], [0], [0], [0], [0], [0], [0]],
-                 [[0], [0], [0], [0], [0], [0], [0], [0]],
-                 [[0], [0], [0], [0], [0], [0], [0], [0]],
-                 [[0], [0], [0], [0], [0], [0], [0], [0]],
-                 [[0], [0], [0], [0], [0], [0], [0], [0]],
-                 [[0], [0], [0], [0], [0], [0], [0], [0]],
-                 [[0], [0], [0], [0], [0], [0], [0], [0]],
-                 [[0], [0], [0], [0], [0], [0], [0], [0]]],
-                [[[0], [0], [0], [0], [0], [0], [0], [0]],
-                 [[0], [0], [0], [0], [0], [0], [0], [0]],
-                 [[0], [0], [6], [6], [6], [6], [0], [0]],
-                 [[0], [0], [6], [6], [6], [6], [0], [0]],
-                 [[0], [0], [6], [6], [6], [6], [0], [0]],
-                 [[0], [0], [6], [6], [6], [6], [0], [0]],
-                 [[0], [0], [0], [0], [0], [0], [0], [0]],
-                 [[0], [0], [0], [0], [0], [0], [0], [0]]],
-                [[[0], [0], [0], [0], [0], [0], [0], [0]],
-                 [[0], [0], [0], [0], [0], [0], [0], [0]],
-                 [[0], [0], [6], [6], [6], [6], [0], [0]],
-                 [[0], [0], [6], [6], [6], [6], [0], [0]],
-                 [[0], [0], [6], [6], [6], [6], [0], [0]],
-                 [[0], [0], [6], [6], [6], [6], [0], [0]],
-                 [[0], [0], [0], [0], [0], [0], [0], [0]],
-                 [[0], [0], [0], [0], [0], [0], [0], [0]]],
-                [[[0], [0], [0], [0], [0], [0], [0], [0]],
-                 [[0], [0], [0], [0], [0], [0], [0], [0]],
-                 [[0], [0], [6], [6], [6], [6], [0], [0]],
-                 [[0], [0], [6], [6], [6], [6], [0], [0]],
-                 [[0], [0], [6], [6], [6], [6], [0], [0]],
-                 [[0], [0], [6], [6], [6], [6], [0], [0]],
-                 [[0], [0], [0], [0], [0], [0], [0], [0]],
-                 [[0], [0], [0], [0], [0], [0], [0], [0]]],
-                [[[0], [0], [0], [0], [0], [0], [0], [0]],
-                 [[0], [0], [0], [0], [0], [0], [0], [0]],
-                 [[0], [0], [6], [6], [6], [6], [0], [0]],
-                 [[0], [0], [6], [6], [6], [6], [0], [0]],
-                 [[0], [0], [6], [6], [6], [6], [0], [0]],
-                 [[0], [0], [6], [6], [6], [6], [0], [0]],
-                 [[0], [0], [0], [0], [0], [0], [0], [0]],
-                 [[0], [0], [0], [0], [0], [0], [0], [0]]],
-                [[[0], [0], [0], [0], [0], [0], [0], [0]],
-                 [[0], [0], [0], [0], [0], [0], [0], [0]],
-                 [[0], [0], [0], [0], [0], [0], [0], [0]],
-                 [[0], [0], [0], [0], [0], [0], [0], [0]],
-                 [[0], [0], [0], [0], [0], [0], [0], [0]],
-                 [[0], [0], [0], [0], [0], [0], [0], [0]],
-                 [[0], [0], [0], [0], [0], [0], [0], [0]],
-                 [[0], [0], [0], [0], [0], [0], [0], [0]]],
-                [[[0], [0], [0], [0], [0], [0], [0], [0]],
-                 [[0], [0], [0], [0], [0], [0], [0], [0]],
-                 [[0], [0], [0], [0], [0], [0], [0], [0]],
-                 [[0], [0], [0], [0], [0], [0], [0], [0]],
-                 [[0], [0], [0], [0], [0], [0], [0], [0]],
-                 [[0], [0], [0], [0], [0], [0], [0], [0]],
-                 [[0], [0], [0], [0], [0], [0], [0], [0]],
-                 [[0], [0], [0], [0], [0], [0], [0], [0]]],
+                [
+                    [[0], [0], [0], [0], [0], [0], [0], [0]],
+                    [[0], [0], [0], [0], [0], [0], [0], [0]],
+                    [[0], [0], [0], [0], [0], [0], [0], [0]],
+                    [[0], [0], [0], [0], [0], [0], [0], [0]],
+                    [[0], [0], [0], [0], [0], [0], [0], [0]],
+                    [[0], [0], [0], [0], [0], [0], [0], [0]],
+                    [[0], [0], [0], [0], [0], [0], [0], [0]],
+                    [[0], [0], [0], [0], [0], [0], [0], [0]],
+                ],
+                [
+                    [[0], [0], [0], [0], [0], [0], [0], [0]],
+                    [[0], [0], [0], [0], [0], [0], [0], [0]],
+                    [[0], [0], [0], [0], [0], [0], [0], [0]],
+                    [[0], [0], [0], [0], [0], [0], [0], [0]],
+                    [[0], [0], [0], [0], [0], [0], [0], [0]],
+                    [[0], [0], [0], [0], [0], [0], [0], [0]],
+                    [[0], [0], [0], [0], [0], [0], [0], [0]],
+                    [[0], [0], [0], [0], [0], [0], [0], [0]],
+                ],
+                [
+                    [[0], [0], [0], [0], [0], [0], [0], [0]],
+                    [[0], [0], [0], [0], [0], [0], [0], [0]],
+                    [[0], [0], [6], [6], [6], [6], [0], [0]],
+                    [[0], [0], [6], [6], [6], [6], [0], [0]],
+                    [[0], [0], [6], [6], [6], [6], [0], [0]],
+                    [[0], [0], [6], [6], [6], [6], [0], [0]],
+                    [[0], [0], [0], [0], [0], [0], [0], [0]],
+                    [[0], [0], [0], [0], [0], [0], [0], [0]],
+                ],
+                [
+                    [[0], [0], [0], [0], [0], [0], [0], [0]],
+                    [[0], [0], [0], [0], [0], [0], [0], [0]],
+                    [[0], [0], [6], [6], [6], [6], [0], [0]],
+                    [[0], [0], [6], [6], [6], [6], [0], [0]],
+                    [[0], [0], [6], [6], [6], [6], [0], [0]],
+                    [[0], [0], [6], [6], [6], [6], [0], [0]],
+                    [[0], [0], [0], [0], [0], [0], [0], [0]],
+                    [[0], [0], [0], [0], [0], [0], [0], [0]],
+                ],
+                [
+                    [[0], [0], [0], [0], [0], [0], [0], [0]],
+                    [[0], [0], [0], [0], [0], [0], [0], [0]],
+                    [[0], [0], [6], [6], [6], [6], [0], [0]],
+                    [[0], [0], [6], [6], [6], [6], [0], [0]],
+                    [[0], [0], [6], [6], [6], [6], [0], [0]],
+                    [[0], [0], [6], [6], [6], [6], [0], [0]],
+                    [[0], [0], [0], [0], [0], [0], [0], [0]],
+                    [[0], [0], [0], [0], [0], [0], [0], [0]],
+                ],
+                [
+                    [[0], [0], [0], [0], [0], [0], [0], [0]],
+                    [[0], [0], [0], [0], [0], [0], [0], [0]],
+                    [[0], [0], [6], [6], [6], [6], [0], [0]],
+                    [[0], [0], [6], [6], [6], [6], [0], [0]],
+                    [[0], [0], [6], [6], [6], [6], [0], [0]],
+                    [[0], [0], [6], [6], [6], [6], [0], [0]],
+                    [[0], [0], [0], [0], [0], [0], [0], [0]],
+                    [[0], [0], [0], [0], [0], [0], [0], [0]],
+                ],
+                [
+                    [[0], [0], [0], [0], [0], [0], [0], [0]],
+                    [[0], [0], [0], [0], [0], [0], [0], [0]],
+                    [[0], [0], [0], [0], [0], [0], [0], [0]],
+                    [[0], [0], [0], [0], [0], [0], [0], [0]],
+                    [[0], [0], [0], [0], [0], [0], [0], [0]],
+                    [[0], [0], [0], [0], [0], [0], [0], [0]],
+                    [[0], [0], [0], [0], [0], [0], [0], [0]],
+                    [[0], [0], [0], [0], [0], [0], [0], [0]],
+                ],
+                [
+                    [[0], [0], [0], [0], [0], [0], [0], [0]],
+                    [[0], [0], [0], [0], [0], [0], [0], [0]],
+                    [[0], [0], [0], [0], [0], [0], [0], [0]],
+                    [[0], [0], [0], [0], [0], [0], [0], [0]],
+                    [[0], [0], [0], [0], [0], [0], [0], [0]],
+                    [[0], [0], [0], [0], [0], [0], [0], [0]],
+                    [[0], [0], [0], [0], [0], [0], [0], [0]],
+                    [[0], [0], [0], [0], [0], [0], [0], [0]],
+                ],
             ]
         )
         full.build(input_array)
-        processed = full.process(input_array)
+        processed = full.pad(input_array)
         assert_array_equal(expected, processed)
 
     def test_full3d_stride(self):
@@ -1017,78 +1117,78 @@ class TestFull3D(unittest.TestCase):
 
         input_array = np.array(
             [
-                [[[6], [6], [6]],
-                 [[6], [6], [6]],
-                 [[6], [6], [6]],
-                 [[6], [6], [6]]],
-                [[[6], [6], [6]],
-                 [[6], [6], [6]],
-                 [[6], [6], [6]],
-                 [[6], [6], [6]]],
-                [[[6], [6], [6]],
-                 [[6], [6], [6]],
-                 [[6], [6], [6]],
-                 [[6], [6], [6]]],
-                [[[6], [6], [6]],
-                 [[6], [6], [6]],
-                 [[6], [6], [6]],
-                 [[6], [6], [6]]],
+                [[[6], [6], [6]], [[6], [6], [6]], [[6], [6], [6]], [[6], [6], [6]]],
+                [[[6], [6], [6]], [[6], [6], [6]], [[6], [6], [6]], [[6], [6], [6]]],
+                [[[6], [6], [6]], [[6], [6], [6]], [[6], [6], [6]], [[6], [6], [6]]],
+                [[[6], [6], [6]], [[6], [6], [6]], [[6], [6], [6]], [[6], [6], [6]]],
             ]
         )
         expected = np.array(
             [
-                [[[0], [0], [0], [0], [0]],
-                 [[0], [0], [0], [0], [0]],
-                 [[0], [0], [0], [0], [0]],
-                 [[0], [0], [0], [0], [0]],
-                 [[0], [0], [0], [0], [0]],
-                 [[0], [0], [0], [0], [0]],
-                 [[0], [0], [0], [0], [0]],
-                 [[0], [0], [0], [0], [0]]],
-                [[[0], [0], [0], [0], [0]],
-                 [[0], [0], [0], [0], [0]],
-                 [[0], [0], [6], [6], [6]],
-                 [[0], [0], [6], [6], [6]],
-                 [[0], [0], [6], [6], [6]],
-                 [[0], [0], [6], [6], [6]],
-                 [[0], [0], [0], [0], [0]],
-                 [[0], [0], [0], [0], [0]]],
-                [[[0], [0], [0], [0], [0]],
-                 [[0], [0], [0], [0], [0]],
-                 [[0], [0], [6], [6], [6]],
-                 [[0], [0], [6], [6], [6]],
-                 [[0], [0], [6], [6], [6]],
-                 [[0], [0], [6], [6], [6]],
-                 [[0], [0], [0], [0], [0]],
-                 [[0], [0], [0], [0], [0]]],
-                [[[0], [0], [0], [0], [0]],
-                 [[0], [0], [0], [0], [0]],
-                 [[0], [0], [6], [6], [6]],
-                 [[0], [0], [6], [6], [6]],
-                 [[0], [0], [6], [6], [6]],
-                 [[0], [0], [6], [6], [6]],
-                 [[0], [0], [0], [0], [0]],
-                 [[0], [0], [0], [0], [0]]],
-                [[[0], [0], [0], [0], [0]],
-                 [[0], [0], [0], [0], [0]],
-                 [[0], [0], [6], [6], [6]],
-                 [[0], [0], [6], [6], [6]],
-                 [[0], [0], [6], [6], [6]],
-                 [[0], [0], [6], [6], [6]],
-                 [[0], [0], [0], [0], [0]],
-                 [[0], [0], [0], [0], [0]]],
-                [[[0], [0], [0], [0], [0]],
-                 [[0], [0], [0], [0], [0]],
-                 [[0], [0], [0], [0], [0]],
-                 [[0], [0], [0], [0], [0]],
-                 [[0], [0], [0], [0], [0]],
-                 [[0], [0], [0], [0], [0]],
-                 [[0], [0], [0], [0], [0]],
-                 [[0], [0], [0], [0], [0]]],
+                [
+                    [[0], [0], [0], [0], [0]],
+                    [[0], [0], [0], [0], [0]],
+                    [[0], [0], [0], [0], [0]],
+                    [[0], [0], [0], [0], [0]],
+                    [[0], [0], [0], [0], [0]],
+                    [[0], [0], [0], [0], [0]],
+                    [[0], [0], [0], [0], [0]],
+                    [[0], [0], [0], [0], [0]],
+                ],
+                [
+                    [[0], [0], [0], [0], [0]],
+                    [[0], [0], [0], [0], [0]],
+                    [[0], [0], [6], [6], [6]],
+                    [[0], [0], [6], [6], [6]],
+                    [[0], [0], [6], [6], [6]],
+                    [[0], [0], [6], [6], [6]],
+                    [[0], [0], [0], [0], [0]],
+                    [[0], [0], [0], [0], [0]],
+                ],
+                [
+                    [[0], [0], [0], [0], [0]],
+                    [[0], [0], [0], [0], [0]],
+                    [[0], [0], [6], [6], [6]],
+                    [[0], [0], [6], [6], [6]],
+                    [[0], [0], [6], [6], [6]],
+                    [[0], [0], [6], [6], [6]],
+                    [[0], [0], [0], [0], [0]],
+                    [[0], [0], [0], [0], [0]],
+                ],
+                [
+                    [[0], [0], [0], [0], [0]],
+                    [[0], [0], [0], [0], [0]],
+                    [[0], [0], [6], [6], [6]],
+                    [[0], [0], [6], [6], [6]],
+                    [[0], [0], [6], [6], [6]],
+                    [[0], [0], [6], [6], [6]],
+                    [[0], [0], [0], [0], [0]],
+                    [[0], [0], [0], [0], [0]],
+                ],
+                [
+                    [[0], [0], [0], [0], [0]],
+                    [[0], [0], [0], [0], [0]],
+                    [[0], [0], [6], [6], [6]],
+                    [[0], [0], [6], [6], [6]],
+                    [[0], [0], [6], [6], [6]],
+                    [[0], [0], [6], [6], [6]],
+                    [[0], [0], [0], [0], [0]],
+                    [[0], [0], [0], [0], [0]],
+                ],
+                [
+                    [[0], [0], [0], [0], [0]],
+                    [[0], [0], [0], [0], [0]],
+                    [[0], [0], [0], [0], [0]],
+                    [[0], [0], [0], [0], [0]],
+                    [[0], [0], [0], [0], [0]],
+                    [[0], [0], [0], [0], [0]],
+                    [[0], [0], [0], [0], [0]],
+                    [[0], [0], [0], [0], [0]],
+                ],
             ]
         )
         full.build(input_array)
-        processed = full.process(input_array)
+        processed = full.pad(input_array)
         assert_array_equal(expected, processed)
 
 
@@ -1104,7 +1204,7 @@ class TestSame1D(unittest.TestCase):
         same = Same1D(kernel_size, stride)
         same.build(input_array)
 
-        processed = same.process(input_array)
+        processed = same.pad(input_array)
         assert_array_equal(processed, expected)
 
     def test_same1d_no_stride_2(self):
@@ -1118,7 +1218,7 @@ class TestSame1D(unittest.TestCase):
         same = Same1D(kernel_size, stride)
         same.build(input_array)
 
-        processed = same.process(input_array)
+        processed = same.pad(input_array)
         print(processed)
         assert_array_equal(processed, expected)
 
@@ -1133,7 +1233,7 @@ class TestSame1D(unittest.TestCase):
         same = Same1D(kernel_size, stride)
         same.build(input_array)
 
-        processed = same.process(input_array)
+        processed = same.pad(input_array)
         print(processed)
         assert_array_equal(processed, expected)
 
@@ -1148,7 +1248,7 @@ class TestSame1D(unittest.TestCase):
         same = Same1D(kernel_size, stride)
         same.build(input_array)
 
-        processed = same.process(input_array)
+        processed = same.pad(input_array)
         print(processed)
         assert_array_equal(processed, expected)
 
@@ -1158,14 +1258,11 @@ class TestSame1D(unittest.TestCase):
         input_array = np.array([[1], [2], [3], [4], [5]])
         kernel_size = 3
         stride = 4
-        expected = np.array([
-            [[0], [1], [2]],
-            [[4], [5], [0]]
-        ])
+        expected = np.array([[[0], [1], [2]], [[4], [5], [0]]])
 
         same = Same1D(kernel_size, stride)
         same.build(input_array)
-        to_be_sliced = same.process(input_array)
+        to_be_sliced = same.pad(input_array)
 
         x_slices = same.slices()
 
@@ -1174,7 +1271,7 @@ class TestSame1D(unittest.TestCase):
 
 
 class TestSame2D(unittest.TestCase):
-    def test_full2d(self):
+    def test_same2d(self):
         from networks.layers.conv.paddings import Same2D
 
         kernel_size = np.array([3, 3])
@@ -1203,7 +1300,7 @@ class TestSame2D(unittest.TestCase):
             ]
         )
         same.build(input_array)
-        processed = same.process(input_array)
+        processed = same.pad(input_array)
 
         assert_array_equal(expected, processed)
 
@@ -1213,7 +1310,7 @@ class TestSame2D(unittest.TestCase):
             for x_slice in x_slices():
                 print(processed[y_slice, x_slice, :])
 
-    def test_full2d_stride(self):
+    def test_same2d_stride(self):
         from networks.layers.conv.paddings import Same2D
 
         kernel_size = np.array([3, 3])
@@ -1243,10 +1340,10 @@ class TestSame2D(unittest.TestCase):
             ]
         )
         same.build(input_array)
-        processed = same.process(input_array)
+        processed = same.pad(input_array)
         assert_array_equal(expected, processed)
 
-    def test_full2d_stride_2(self):
+    def test_same2d_stride_2(self):
         from networks.layers.conv.paddings import Same2D
 
         kernel_size = np.array([3, 3])
@@ -1272,20 +1369,19 @@ class TestSame2D(unittest.TestCase):
                 [[0], [6], [6], [6], [0]],
                 [[0], [6], [6], [6], [0]],
                 [[0], [0], [0], [0], [0]],
-
             ]
         )
         same.build(input_array)
-        processed = same.process(input_array)
+        processed = same.pad(input_array)
         assert_array_equal(expected, processed)
 
-    def test_full2d_stride_3(self):
+    def test_same2d_stride_3(self):
         from networks.layers.conv.paddings import Same2D
 
         kernel_size = np.array([2, 2])
         stride = np.array([3, 3])
 
-        full = Same2D(kernel_size, stride)
+        same = Same2D(kernel_size, stride)
 
         input_array = np.array(
             [
@@ -1307,17 +1403,17 @@ class TestSame2D(unittest.TestCase):
                 [[0], [0], [0]],
             ]
         )
-        full.build(input_array)
-        processed = full.process(input_array)
+        same.build(input_array)
+        processed = same.pad(input_array)
         assert_array_equal(expected, processed)
 
-    def test_full2d_kernel_size(self):
+    def test_same2d_kernel_size(self):
         from networks.layers.conv.paddings import Same2D
 
         kernel_size = np.array([2, 1])
         stride = np.array([3, 3])
 
-        full = Same2D(kernel_size, stride)
+        same = Same2D(kernel_size, stride)
 
         input_array = np.array(
             [
@@ -1338,110 +1434,121 @@ class TestSame2D(unittest.TestCase):
                 [[6], [6], [6]],
             ]
         )
-        full.build(input_array)
-        processed = full.process(input_array)
+        same.build(input_array)
+        processed = same.pad(input_array)
         assert_array_equal(expected, processed)
 
 
 class TestSame3D(unittest.TestCase):
-    def test_full3d(self):
+    def test_same3d(self):
         from networks.layers.conv.paddings import Same3D
 
         kernel_size = np.array([3, 3, 3])
         stride = np.array([1, 1, 1])
 
-        full = Same3D(kernel_size, stride)
+        same = Same3D(kernel_size, stride)
 
         input_array = np.array(
             [
-                [[[6], [6], [6], [6]],
-                 [[6], [6], [6], [6]],
-                 [[6], [6], [6], [6]],
-                 [[6], [6], [6], [6]]],
-                [[[6], [6], [6], [6]],
-                 [[6], [6], [6], [6]],
-                 [[6], [6], [6], [6]],
-                 [[6], [6], [6], [6]]],
-                [[[6], [6], [6], [6]],
-                 [[6], [6], [6], [6]],
-                 [[6], [6], [6], [6]],
-                 [[6], [6], [6], [6]]],
-                [[[6], [6], [6], [6]],
-                 [[6], [6], [6], [6]],
-                 [[6], [6], [6], [6]],
-                 [[6], [6], [6], [6]]],
+                [
+                    [[6], [6], [6], [6]],
+                    [[6], [6], [6], [6]],
+                    [[6], [6], [6], [6]],
+                    [[6], [6], [6], [6]],
+                ],
+                [
+                    [[6], [6], [6], [6]],
+                    [[6], [6], [6], [6]],
+                    [[6], [6], [6], [6]],
+                    [[6], [6], [6], [6]],
+                ],
+                [
+                    [[6], [6], [6], [6]],
+                    [[6], [6], [6], [6]],
+                    [[6], [6], [6], [6]],
+                    [[6], [6], [6], [6]],
+                ],
+                [
+                    [[6], [6], [6], [6]],
+                    [[6], [6], [6], [6]],
+                    [[6], [6], [6], [6]],
+                    [[6], [6], [6], [6]],
+                ],
             ]
         )
         expected = np.array(
             [
-                [[[0], [0], [0], [0], [0], [0]],
-                 [[0], [0], [0], [0], [0], [0]],
-                 [[0], [0], [0], [0], [0], [0]],
-                 [[0], [0], [0], [0], [0], [0]],
-                 [[0], [0], [0], [0], [0], [0]],
-                 [[0], [0], [0], [0], [0], [0]]],
-                [[[0], [0], [0], [0], [0], [0]],
-                 [[0], [6], [6], [6], [6], [0]],
-                 [[0], [6], [6], [6], [6], [0]],
-                 [[0], [6], [6], [6], [6], [0]],
-                 [[0], [6], [6], [6], [6], [0]],
-                 [[0], [0], [0], [0], [0], [0]]],
-                [[[0], [0], [0], [0], [0], [0]],
-                 [[0], [6], [6], [6], [6], [0]],
-                 [[0], [6], [6], [6], [6], [0]],
-                 [[0], [6], [6], [6], [6], [0]],
-                 [[0], [6], [6], [6], [6], [0]],
-                 [[0], [0], [0], [0], [0], [0]]],
-                [[[0], [0], [0], [0], [0], [0]],
-                 [[0], [6], [6], [6], [6], [0]],
-                 [[0], [6], [6], [6], [6], [0]],
-                 [[0], [6], [6], [6], [6], [0]],
-                 [[0], [6], [6], [6], [6], [0]],
-                 [[0], [0], [0], [0], [0], [0]]],
-                [[[0], [0], [0], [0], [0], [0]],
-                 [[0], [6], [6], [6], [6], [0]],
-                 [[0], [6], [6], [6], [6], [0]],
-                 [[0], [6], [6], [6], [6], [0]],
-                 [[0], [6], [6], [6], [6], [0]],
-                 [[0], [0], [0], [0], [0], [0]]],
-                [[[0], [0], [0], [0], [0], [0]],
-                 [[0], [0], [0], [0], [0], [0]],
-                 [[0], [0], [0], [0], [0], [0]],
-                 [[0], [0], [0], [0], [0], [0]],
-                 [[0], [0], [0], [0], [0], [0]],
-                 [[0], [0], [0], [0], [0], [0]]],
+                [
+                    [[0], [0], [0], [0], [0], [0]],
+                    [[0], [0], [0], [0], [0], [0]],
+                    [[0], [0], [0], [0], [0], [0]],
+                    [[0], [0], [0], [0], [0], [0]],
+                    [[0], [0], [0], [0], [0], [0]],
+                    [[0], [0], [0], [0], [0], [0]],
+                ],
+                [
+                    [[0], [0], [0], [0], [0], [0]],
+                    [[0], [6], [6], [6], [6], [0]],
+                    [[0], [6], [6], [6], [6], [0]],
+                    [[0], [6], [6], [6], [6], [0]],
+                    [[0], [6], [6], [6], [6], [0]],
+                    [[0], [0], [0], [0], [0], [0]],
+                ],
+                [
+                    [[0], [0], [0], [0], [0], [0]],
+                    [[0], [6], [6], [6], [6], [0]],
+                    [[0], [6], [6], [6], [6], [0]],
+                    [[0], [6], [6], [6], [6], [0]],
+                    [[0], [6], [6], [6], [6], [0]],
+                    [[0], [0], [0], [0], [0], [0]],
+                ],
+                [
+                    [[0], [0], [0], [0], [0], [0]],
+                    [[0], [6], [6], [6], [6], [0]],
+                    [[0], [6], [6], [6], [6], [0]],
+                    [[0], [6], [6], [6], [6], [0]],
+                    [[0], [6], [6], [6], [6], [0]],
+                    [[0], [0], [0], [0], [0], [0]],
+                ],
+                [
+                    [[0], [0], [0], [0], [0], [0]],
+                    [[0], [6], [6], [6], [6], [0]],
+                    [[0], [6], [6], [6], [6], [0]],
+                    [[0], [6], [6], [6], [6], [0]],
+                    [[0], [6], [6], [6], [6], [0]],
+                    [[0], [0], [0], [0], [0], [0]],
+                ],
+                [
+                    [[0], [0], [0], [0], [0], [0]],
+                    [[0], [0], [0], [0], [0], [0]],
+                    [[0], [0], [0], [0], [0], [0]],
+                    [[0], [0], [0], [0], [0], [0]],
+                    [[0], [0], [0], [0], [0], [0]],
+                    [[0], [0], [0], [0], [0], [0]],
+                ],
             ]
         )
-        full.build(input_array)
-        processed = full.process(input_array)
+        same.build(input_array)
+        processed = same.pad(input_array)
         assert_array_equal(expected, processed)
 
-    def test_full3d_stride(self):
+        unpadded = same.unpad(processed)
+        assert_array_equal(unpadded, input_array)
+
+    def test_same3d_stride(self):
         from networks.layers.conv.paddings import Same3D
 
         kernel_size = np.array([3, 3, 2])
         stride = np.array([2, 1, 1])
 
-        full = Same3D(kernel_size, stride)
+        same = Same3D(kernel_size, stride)
 
         input_array = np.array(
             [
-                [[[6], [6], [6]],
-                 [[6], [6], [6]],
-                 [[6], [6], [6]],
-                 [[6], [6], [6]]],
-                [[[6], [6], [6]],
-                 [[6], [6], [6]],
-                 [[6], [6], [6]],
-                 [[6], [6], [6]]],
-                [[[6], [6], [6]],
-                 [[6], [6], [6]],
-                 [[6], [6], [6]],
-                 [[6], [6], [6]]],
-                [[[6], [6], [6]],
-                 [[6], [6], [6]],
-                 [[6], [6], [6]],
-                 [[6], [6], [6]]],
+                [[[6], [6], [6]], [[6], [6], [6]], [[6], [6], [6]], [[6], [6], [6]]],
+                [[[6], [6], [6]], [[6], [6], [6]], [[6], [6], [6]], [[6], [6], [6]]],
+                [[[6], [6], [6]], [[6], [6], [6]], [[6], [6], [6]], [[6], [6], [6]]],
+                [[[6], [6], [6]], [[6], [6], [6]], [[6], [6], [6]], [[6], [6], [6]]],
             ]
         )
 
@@ -1449,41 +1556,230 @@ class TestSame3D(unittest.TestCase):
 
         expected = np.array(
             [
-                [[[0], [0], [0], [0], [0]],
-                 [[0], [6], [6], [6], [0]],
-                 [[0], [6], [6], [6], [0]],
-                 [[0], [6], [6], [6], [0]],
-                 [[0], [6], [6], [6], [0]],
-                 [[0], [0], [0], [0], [0]]],
-                [[[0], [0], [0], [0], [0]],
-                 [[0], [6], [6], [6], [0]],
-                 [[0], [6], [6], [6], [0]],
-                 [[0], [6], [6], [6], [0]],
-                 [[0], [6], [6], [6], [0]],
-                 [[0], [0], [0], [0], [0]]],
-                [[[0], [0], [0], [0], [0]],
-                 [[0], [6], [6], [6], [0]],
-                 [[0], [6], [6], [6], [0]],
-                 [[0], [6], [6], [6], [0]],
-                 [[0], [6], [6], [6], [0]],
-                 [[0], [0], [0], [0], [0]]],
-                [[[0], [0], [0], [0], [0]],
-                 [[0], [6], [6], [6], [0]],
-                 [[0], [6], [6], [6], [0]],
-                 [[0], [6], [6], [6], [0]],
-                 [[0], [6], [6], [6], [0]],
-                 [[0], [0], [0], [0], [0]]],
-                [[[0], [0], [0], [0], [0]],
-                 [[0], [0], [0], [0], [0]],
-                 [[0], [0], [0], [0], [0]],
-                 [[0], [0], [0], [0], [0]],
-                 [[0], [0], [0], [0], [0]],
-                 [[0], [0], [0], [0], [0]]],
+                [
+                    [[0], [0], [0], [0], [0]],
+                    [[0], [6], [6], [6], [0]],
+                    [[0], [6], [6], [6], [0]],
+                    [[0], [6], [6], [6], [0]],
+                    [[0], [6], [6], [6], [0]],
+                    [[0], [0], [0], [0], [0]],
+                ],
+                [
+                    [[0], [0], [0], [0], [0]],
+                    [[0], [6], [6], [6], [0]],
+                    [[0], [6], [6], [6], [0]],
+                    [[0], [6], [6], [6], [0]],
+                    [[0], [6], [6], [6], [0]],
+                    [[0], [0], [0], [0], [0]],
+                ],
+                [
+                    [[0], [0], [0], [0], [0]],
+                    [[0], [6], [6], [6], [0]],
+                    [[0], [6], [6], [6], [0]],
+                    [[0], [6], [6], [6], [0]],
+                    [[0], [6], [6], [6], [0]],
+                    [[0], [0], [0], [0], [0]],
+                ],
+                [
+                    [[0], [0], [0], [0], [0]],
+                    [[0], [6], [6], [6], [0]],
+                    [[0], [6], [6], [6], [0]],
+                    [[0], [6], [6], [6], [0]],
+                    [[0], [6], [6], [6], [0]],
+                    [[0], [0], [0], [0], [0]],
+                ],
+                [
+                    [[0], [0], [0], [0], [0]],
+                    [[0], [0], [0], [0], [0]],
+                    [[0], [0], [0], [0], [0]],
+                    [[0], [0], [0], [0], [0]],
+                    [[0], [0], [0], [0], [0]],
+                    [[0], [0], [0], [0], [0]],
+                ],
             ]
         )
-        full.build(input_array)
-        processed = full.process(input_array)
+        same.build(input_array)
+        processed = same.pad(input_array)
         assert_array_equal(expected, processed)
+
+
+class TestMiscellaneous(unittest.TestCase):
+    def test_tensor_dot(self):
+
+        # k_size = 3, n_channels = 2, filter = 2 -> (3, 2, 2)
+
+        fake_kernel = np.array(
+            [
+                [
+                    [r("w111"), r("w112")],  # channel 1
+                    [r("w121"), r("w122")],  # channel 2
+                ],
+                [
+                    [r("w211"), r("w212")],  # channel 1
+                    [r("w221"), r("w222")],  # channel 2
+                ],
+                [
+                    [r("w311"), r("w312")],  # channel 1
+                    [r("w321"), r("w322")],  # channel 2
+                ],
+            ]
+        )
+
+        # (k_size, output_length, n_channels) -> (3, 3, 2)
+        dzdw_m = np.array(
+            [
+                [
+                    [r("a11"), r("a12")],  # a1
+                    [r("a21"), r("a22")],  # a2
+                    [r("a31"), r("a32")],  # a3
+                ],
+                [
+                    [r("a21"), r("a22")],  # a3
+                    [r("a31"), r("a32")],  # a4
+                    [r("a41"), r("a42")],  # a5
+                ],
+                [
+                    [r("a31"), r("a32")],  # a3
+                    [r("a41"), r("a42")],  # a4
+                    [r("a51"), r("a52")],  # a5
+                ],
+            ]
+        )
+        # (output_length, n_channels) -> (3, 2)
+        grad_m = np.array(
+            [[r("z11"), r("z12")], [r("z21"), r("z22")], [r("z31"), r("z32")]]
+        )
+
+        # np.einsum("ij, j -> i", dzdw.T, grad) dot
+        ret = np.einsum("ijk, ik -> jk", dzdw_m, grad_m)
+
+        self.assertEqual(ret.shape, fake_kernel.shape[:-1])
+
+    def test_tensor_dot_stride(self):
+
+        # k_size = 3, n_channels = 2, filter = 3 -> (3, 2, 3)
+
+        fake_kernel = np.array(
+            [
+                [
+                    [r("w111"), r("w112"), r("w113")],  # channel 1
+                    [r("w121"), r("w122"), r("w123")],  # channel 2
+                ],
+                [
+                    [r("w211"), r("w212"), r("w213")],  # channel 1
+                    [r("w221"), r("w222"), r("w223")],  # channel 2
+                ],
+                [
+                    [r("w311"), r("w312"), r("w312")],  # channel 1
+                    [r("w321"), r("w322"), r("w323")],  # channel 2
+                ],
+            ]
+        )
+
+        # (k_size, output_length, n_channels) -> (3, 2, 2)
+        dzdw_m = np.array(
+            [
+                [
+                    [r("a11"), r("a12")],  # a1
+                    [r("a21"), r("a22")],  # a2
+                    [r("a31"), r("a32")],  # a3
+                ],
+                # [     # strided
+                #     [r("a21"), r("a22")],     # a3
+                #     [r("a31"), r("a32")],     # a4
+                #     [r("a41"), r("a42")]      # a5
+                # ],
+                [
+                    [r("a31"), r("a32")],  # a3
+                    [r("a41"), r("a42")],  # a4
+                    [r("a51"), r("a52")],  # a5
+                ],
+            ]
+        )
+        # (output_length, n_channels) -> (2, 2)
+        grad_m = np.array(
+            [
+                [r("z11"), r("z12")],
+                [r("z21"), r("z22")],
+            ]
+        )
+
+        # np.einsum("ij, j -> i", dzdw.T, grad) dot
+        ret = np.einsum("ijk, ik -> jk", dzdw_m, grad_m)
+
+        self.assertEqual(ret.shape, fake_kernel.shape[:-1])
+
+    def test_bias_product(self):
+
+        # output: (length, filters) -> (3, 2)
+        grad_m = np.array(
+            [
+                [r("z11"), r("z12")],
+                [r("z21"), r("z22")],
+                [r("z31"), r("z32")],
+            ]
+        )
+
+        # bias: (filters) -> 2
+        biases = np.array([r("b1"), r("b2")])
+
+        # dC/db = dC/db[:, j] for j in filters
+        dcdb_expected = np.array([np.sum(grad_m[:, j]) for j in range(2)])
+
+        vector_dcdb = np.sum(grad_m, axis=0)
+
+        assert_array_equal(dcdb_expected, vector_dcdb)
+
+    def test_dzda_slicing_ez(self):
+        ez_w = np.array([r("w1"), r("w2"), r("w3")])
+        ez_a = np.array([r("a1"), r("a2"), r("a3"), r("a4"), r("a5")])
+        ez_z = np.array([r("z1"), r("z2"), r("z3")])
+
+        # sample dzda should look like this
+        # [[w1 w2 w3 0  0 ]
+        #  [0  0  w1 w2 w3]]
+        expected_dzda = np.array(
+            [
+                [r("w1"), r("w2"), r("w3"), r(0), r(0)],
+                [r(0), r("w1"), r("w2"), r("w3"), r(0)],
+                [r(0), r(0), r("w1"), r("w2"), r("w3")],
+            ]
+        )
+
+        empty_dzda = np.zeros((3, 5))
+
+        slices = [slice(0, 3), slice(1, 4), slice(2, 5)]
+
+        for output_neuron_n, x_slice in enumerate(slices):
+            empty_dzda[output_neuron_n, x_slice] = ez_w
+
+        print(empty_dzda)
+
+    def test_dzda_slicing(self):
+        kernel_count = 2
+        output_len = 3
+        input_shape = (5, 4)
+        kernel_size = 3
+
+        w = np.arange(kernel_size * input_shape[1] * kernel_count).reshape(
+            (kernel_size, input_shape[1], kernel_count)
+        )
+
+        z = np.ones((output_len, kernel_count))
+
+        dzda = np.zeros((output_len, *input_shape, kernel_count))
+
+        slices = [
+            slice(0, 3),
+            slice(1, 4),
+            slice(2, 5)
+        ]
+
+        for output_i, x_slice in enumerate(slices):
+            dzda[output_i, x_slice] = w
+
+        dcda = np.einsum("ijkl, il -> jk", dzda, z)
+        self.assertEqual(dcda.shape, input_shape)
 
 
 class r:
@@ -1497,13 +1793,20 @@ class r:
         return self.s
 
     def __add__(self, other):
-        return f"{self.s} + {other.s}"
+        if other == 0:
+            return self
+        return r(f"{self.s} + {other.s if hasattr(other, 's') else other}")
+
+    def __radd__(self, other):
+        if other == 0:
+            return self
+        return r(f"{self.s} + {other.s if hasattr(other, 's') else other}")
 
     def __mul__(self, other):
-        return f"{self.s}{other.s}"
+        return r(f"{self.s}{other.s if hasattr(other, 's') else other}")
 
     def __eq__(self, other):
-        return self.s == other.s
+        return self.s == other.s if hasattr(other, "s") else other
 
     def __float__(self):
         return float(self.s[1:])
