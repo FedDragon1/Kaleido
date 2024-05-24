@@ -47,7 +47,6 @@ class SubclassDispatcherMeta(abc.ABCMeta):
         except TypeError as e:
             # instantiation failed
             exc = e
-            ...
 
         # 2. get name
         name = args[0] if args else SubclassDispatcherMeta._MISSING

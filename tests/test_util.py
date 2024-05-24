@@ -2,6 +2,7 @@ import math
 import unittest
 
 from networks import *
+from networks.util import requires_build, requires_layer_build
 
 
 class TestUtil(unittest.TestCase):
@@ -45,3 +46,55 @@ class TestAssertions(unittest.TestCase):
 
         with self.assertRaises(TypeError):
             assert_valid_stride(0, 1, "raises")
+
+
+class TestDecorators(unittest.TestCase):
+
+    def test_assert_built(self):
+        from networks.util import requires_build
+
+        class T:
+            def __init__(self, built):
+                self.built = built
+
+            @property
+            @requires_layer_build
+            def example_attr(self):
+                return "123"
+
+        t = T(True)
+
+        self.assertEqual("123", t.example_attr)
+        with self.assertRaises(TypeError):
+            t = T(False)
+            print(t.example_attr)
+
+        try:
+            t.example_attr
+        except Exception as e:
+            print(e)
+
+    def test2(self):
+        padding_requires_build = requires_build("Padding not built. Please build this padding first")
+
+        @padding_requires_build
+        def unpad1d(self, a):
+            """
+            Unpads the padded 2d array.
+
+            :param padded_data: array from `pad`
+            :return: unpadded 2d array
+            """
+            return f"p: {a}"
+
+        class T:
+            unpad = unpad1d
+
+        t = T()
+        t.built = False
+
+        with self.assertRaises(TypeError):
+            t.unpad(2)
+
+        t.built = True
+        self.assertEqual("p: 3", t.unpad(3))

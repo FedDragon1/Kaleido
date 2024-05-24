@@ -1,9 +1,11 @@
+import numpy as np
+
 # import util pack first, since it does not rely on other packs
 # some content in util should not be exposed
 # i.e. assertions
 from .util import batches
-from .util.history import *
-from .util.dataset_utils import *
+from .util.history import History, plot_metrics
+from .util.dataset_utils import index_to_onehot
 
 # import core structures
 # Dependency of core structures:
@@ -13,15 +15,29 @@ from .util.dataset_utils import *
 # activations -> layers -> util
 #                   losses _↑
 
-from .optimizers import *
-from .layers import *
-from .losses import *
+from .optimizers import Optimizer, SGD, Adam
+from .layers import (
+    Dense,
+    Input,
+    Layer,
+    PreprocessingLayer,
+    Flatten,
+    Reshape,
+    Activation,
+    ReLU,
+    LeakyReLU,
+    SoftMax,
+    Sigmoid,
+    Tanh,
+    Conv1D
+)
+from .losses import Loss, CrossEntropy, MSE
 
 # import engines after all other components load
-from .engines import *
+from .engines import Sequential
 
 from rich.traceback import install
 
-np.seterr(all='raise')
+np.seterr(all="raise")
 
 install(show_locals=True)

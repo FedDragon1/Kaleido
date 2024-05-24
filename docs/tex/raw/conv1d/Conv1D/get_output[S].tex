@@ -9,19 +9,19 @@
    execute at begin node={%
    $\vphantom{x_|}\ifnum\the\pgfmatrixcurrentrow<4
      \ifnum\the\pgfmatrixcurrentcolumn<4
-      {w}^{#1}_{\the\pgfmatrixcurrentrow, \the\pgfmatrixcurrentcolumn}
+      {a}^{#1}_{\the\pgfmatrixcurrentrow, \the\pgfmatrixcurrentcolumn}
      \else
       \ifnum\the\pgfmatrixcurrentcolumn=5
-       {w}^{#1}_{\the\pgfmatrixcurrentrow, j}
+       {a}^{#1}_{\the\pgfmatrixcurrentrow, j}
       \fi
      \fi
     \else
      \ifnum\the\pgfmatrixcurrentrow=5
       \ifnum\the\pgfmatrixcurrentcolumn<4
-       {w}^{#1}_{i, \the\pgfmatrixcurrentcolumn}
+       {a}^{#1}_{i, \the\pgfmatrixcurrentcolumn}
       \else
        \ifnum\the\pgfmatrixcurrentcolumn=5
-        {w}^{#1}_{i, j}
+        {a}^{#1}_{i, j}
        \fi
       \fi
      \fi

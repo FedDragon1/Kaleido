@@ -4,6 +4,7 @@ import numpy as np
 from numpy.testing import assert_array_equal
 
 from networks import *
+from networks.layers.conv import Conv2D
 
 
 class TestDense(unittest.TestCase):
@@ -47,6 +48,23 @@ class TestDense(unittest.TestCase):
         _, grad = dense.backprop(example_grad)
 
         assert_array_equal(grad, dense.weights.T @ example_grad)
+
+        print(_, grad)
+
+    def test_case(self):
+        dense = Dense(8)
+        input = np.arange(10)
+        output = dense(input)
+
+        dense.weights = np.arange(80).reshape(8, 10)
+        output = dense(input)
+
+        example_grad = np.ones(8)
+        a, g = dense.backprop(example_grad)
+
+        print(output)
+        print(a)
+        print(g)
 
 
 class TestReshape(unittest.TestCase):
@@ -188,7 +206,187 @@ class TestConv1D(unittest.TestCase):
         assert_array_equal(output, expected)
 
     def test_backpropagation(self):
-        ...
+        conv = Conv1D(4, 3, padding="full")
+        test_x = np.array(
+            [[0, 0], [3, 6], [4, 7], [5, 8], [1, 2], [4, 5], [2, 0], [0, 1]]
+        )
+        conv(test_x)
+        conv.weights = np.array(
+            [
+                [[1, 0, 1, 2], [3, 2, -3, 0]],
+                [[-2, 2, 3, 1], [1, 0, 1, 2]],
+                [[3, 2, -3, 0], [-2, 2, 3, 1]],
+            ]
+        )
+        output = conv(test_x)
+        grad = np.ones_like(output)
+
+        trainable, gradient = conv.backprop(grad)
+        self.assertEqual(gradient.shape, tuple(conv.input_shape))
+        self.assertEqual(trainable["weights"].shape, conv.weights.shape)
+        self.assertEqual(trainable["biases"].shape, conv.biases.shape)
+
+    def test_backpropagation_stride(self):
+        conv = Conv1D(4, 3, 2, padding="full")
+        test_x = np.array(
+            [[0, 0], [3, 6], [4, 7], [5, 8], [1, 2], [4, 5], [2, 0], [0, 1]]
+        )
+        conv(test_x)
+        conv.weights = np.array(
+            [
+                [[1, 0, 1, 2], [3, 2, -3, 0]],
+                [[-2, 2, 3, 1], [1, 0, 1, 2]],
+                [[3, 2, -3, 0], [-2, 2, 3, 1]],
+            ]
+        )
+        output = conv(test_x)
+        grad = np.ones_like(output)
+
+        trainable, gradient = conv.backprop(grad)
+        self.assertEqual(gradient.shape, tuple(conv.input_shape))
+        self.assertEqual(trainable["weights"].shape, conv.weights.shape)
+        self.assertEqual(trainable["biases"].shape, conv.biases.shape)
+
+        print(trainable, gradient)
+
+
+class TestConv2D(unittest.TestCase):
+    def test_build(self):
+        with self.assertRaises(TypeError):
+            Conv2D(5, (1, 2), 2, "idk")
+
+        with self.assertRaises(TypeError):
+            Conv2D(-1, (1, 2), 2, "full")
+
+        with self.assertRaises(TypeError):
+            Conv2D(5, (0.5, 2), 2, "valid")
+
+        with self.assertRaises(TypeError):
+            Conv2D(5, (3, 2), (-1, 2), "valid")
+
+        with self.assertRaises(TypeError):
+            Conv2D(5, (3, 2), (2, 3, 2), "valid")
+
+        with self.assertRaises(TypeError):
+            Conv2D(0.5, (3, 2), (2, 2), "valid")
+
+        Conv2D(3, (1, 2), (3, 4), "same")
+        Conv2D(1, 10, (3, 3), "valid")
+        Conv2D(2, 3, 4, "same")
+        Conv2D(5, (9, 6), 2, "full")
+
+    def test_forward(self):
+        conv2d_single_kernel = Conv2D(1, 3)
+
+        test_x = np.arange(6 * 7 * 2).reshape(6, 7, 2)
+        conv2d_single_kernel.build_parameters(test_x)
+
+        self.assertEqual(conv2d_single_kernel.weights.shape, (3, 3, 2, 1))
+        self.assertEqual(conv2d_single_kernel.biases.shape, (1,))
+
+        weights = np.arange(3 * 3 * 2).reshape(3, 3, 2, 1)
+        conv2d_single_kernel.weights = weights
+
+        expected_y = np.array(
+            [
+                [[3585], [3891], [4197], [4503], [4809]],
+                [[5727], [6033], [6339], [6645], [6951]],
+                [[7869], [8175], [8481], [8787], [9093]],
+                [[10011], [10317], [10623], [10929], [11235]],
+            ]
+        )
+        output_y = conv2d_single_kernel(test_x)
+        assert_array_equal(expected_y, output_y)
+
+    def test_forward_rectangular_kernel(self):
+        conv2d = Conv2D(3, (2, 3))
+
+        test_x = np.arange(6 * 7 * 2).reshape(6, 7, 2)
+        conv2d.build_parameters(test_x)
+
+        self.assertEqual(conv2d.weights.shape, (2, 3, 2, 3))
+        self.assertEqual(conv2d.biases.shape, (3,))
+
+        weights = np.arange(2 * 3 * 2 * 3).reshape(2, 3, 2, 3)
+        conv2d.weights = weights
+
+        expected_y = np.array(
+            [[[2742.0, 2856.0, 2970.0],
+              [3138.0, 3276.0, 3414.0],
+              [3534.0, 3696.0, 3858.0],
+              [3930.0, 4116.0, 4302.0],
+              [4326.0, 4536.0, 4746.0]],
+             [[5514.0, 5796.0, 6078.0],
+              [5910.0, 6216.0, 6522.0],
+              [6306.0, 6636.0, 6966.0],
+              [6702.0, 7056.0, 7410.0],
+              [7098.0, 7476.0, 7854.0]],
+             [[8286.0, 8736.0, 9186.0],
+              [8682.0, 9156.0, 9630.0],
+              [9078.0, 9576.0, 10074.0],
+              [9474.0, 9996.0, 10518.0],
+              [9870.0, 10416.0, 10962.0]],
+             [[11058.0, 11676.0, 12294.0],
+              [11454.0, 12096.0, 12738.0],
+              [11850.0, 12516.0, 13182.0],
+              [12246.0, 12936.0, 13626.0],
+              [12642.0, 13356.0, 14070.0]],
+             [[13830.0, 14616.0, 15402.0],
+              [14226.0, 15036.0, 15846.0],
+              [14622.0, 15456.0, 16290.0],
+              [15018.0, 15876.0, 16734.0],
+              [15414.0, 16296.0, 17178.0]]]
+        )
+        output_y = conv2d(test_x)
+        assert_array_equal(expected_y, output_y)
+
+    def test_forward_padding(self):
+        conv2d = Conv2D(3, (2, 3), (2, 1), padding="same")
+
+        test_x = np.arange(6 * 7 * 2).reshape(6, 7, 2)
+        conv2d.build_parameters(test_x)
+
+        self.assertEqual(conv2d.weights.shape, (2, 3, 2, 3))
+        self.assertEqual(conv2d.biases.shape, (3,))
+
+        weights = np.arange(2 * 3 * 2 * 3).reshape(2, 3, 2, 3)
+        conv2d.weights = weights
+
+        expected_y = np.array(
+            [[[1860.0, 1928.0, 1996.0],
+              [2742.0, 2856.0, 2970.0],
+              [3138.0, 3276.0, 3414.0],
+              [3534.0, 3696.0, 3858.0],
+              [3930.0, 4116.0, 4302.0],
+              [4326.0, 4536.0, 4746.0],
+              [2532.0, 2680.0, 2828.0]],
+             [[6228.0, 6520.0, 6812.0],
+              [8286.0, 8736.0, 9186.0],
+              [8682.0, 9156.0, 9630.0],
+              [9078.0, 9576.0, 10074.0],
+              [9474.0, 9996.0, 10518.0],
+              [9870.0, 10416.0, 10962.0],
+              [5556.0, 5928.0, 6300.0]],
+             [[10596.0, 11112.0, 11628.0],
+              [13830.0, 14616.0, 15402.0],
+              [14226.0, 15036.0, 15846.0],
+              [14622.0, 15456.0, 16290.0],
+              [15018.0, 15876.0, 16734.0],
+              [15414.0, 16296.0, 17178.0],
+              [8580.0, 9176.0, 9772.0]]]
+        )
+        output_y = conv2d(test_x)
+        assert_array_equal(expected_y, output_y)
+
+    def test_backward(self):
+        conv2d = Conv2D(4, 3)
+        # test_x = np.arange(6 * 7 * 2).reshape(6, 7, 2)
+        test_x = np.random.random((100, 100, 2)) - 0.5
+        conv2d.build_parameters(test_x)
+        y = conv2d(test_x)
+        grad = np.ones_like(y) / 10
+
+        print(conv2d.backprop(grad))
 
 
 class TestValid1D(unittest.TestCase):
@@ -1769,11 +1967,7 @@ class TestMiscellaneous(unittest.TestCase):
 
         dzda = np.zeros((output_len, *input_shape, kernel_count))
 
-        slices = [
-            slice(0, 3),
-            slice(1, 4),
-            slice(2, 5)
-        ]
+        slices = [slice(0, 3), slice(1, 4), slice(2, 5)]
 
         for output_i, x_slice in enumerate(slices):
             dzda[output_i, x_slice] = w

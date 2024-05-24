@@ -1,4 +1,4 @@
 from .base_activation import Activation
-from .relu_family import *
-from .soft_family import *
-from .tanh_family import *
+from .relu_family import ReLU, LeakyReLU
+from .soft_family import SoftMax
+from .tanh_family import Tanh, Sigmoid

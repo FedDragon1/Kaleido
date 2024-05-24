@@ -2,10 +2,11 @@ main.py
 .ipynb_checkpoints/
 dataset/
 
-# in development
-conv/conv1d.py
-conv/conv2d.py
+docs/public/*
+!docs/public/.gitkeep
 
+docs/tex/out/*
+!docs/tex/out/.gitkeep
 
 .idea/
 

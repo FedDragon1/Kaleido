@@ -1,3 +1,5 @@
+import functools
+
 import numpy as np
 
 from .ctx_managers import ChainError
@@ -154,6 +156,38 @@ def assert_built(self, errmsg):
         raise TypeError(errmsg)
 
 
+def requires_build(errmsg_or_func):
+    if not isinstance(errmsg_or_func, str):
+        @functools.wraps(errmsg_or_func)
+        def inner(self, *args, **kwargs):
+            assert_built(self, "Model not built, please build the model first")
+            return errmsg_or_func(self, *args, **kwargs)
+
+        return inner
+
+    def decorator(func):
+        @functools.wraps(func)
+        def inner(self, *args, **kwargs):
+            assert_built(self, errmsg_or_func)
+            return func(self, *args, **kwargs)
+
+        return inner
+
+    return decorator
+
+
+def requires_build_padding(func):
+    return requires_build("Padding not built. Please build this padding first")(func)
+
+
+def requires_layer_build(func):
+    @functools.wraps(func)
+    def inner(self, *args, **kwargs):
+        assert_built(self, f"{self.__class__.__qualname__} object {self} is not built. Please build this layer first")
+        return func(self, *args, **kwargs)
+    return inner
+
+
 def assert_str(self, errmsg):
     if not isinstance(self, str):
         raise TypeError(errmsg)
@@ -209,9 +243,9 @@ def assert_valid_kernel_size(x, n: int, errmsg):
     positive array, where n equals to dim
 
     :param x: object to be examined
-    :param n: dimension of stride (int)
+    :param n: dimension of kernel (int)
     :param errmsg: error message
-    :return: n dimensional stride array
+    :return: n dimensional kernel array
     """
 
     if n == 1:

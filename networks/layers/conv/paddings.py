@@ -3,9 +3,12 @@ from abc import abstractmethod
 
 import numpy as np
 
-from ...util import SubclassDispatcherMeta, assert_built
+from ...util import SubclassDispatcherMeta, requires_build_padding
 
 
+
+
+@requires_build_padding
 def unpad1d(self, padded_data):
     """
     Unpads the padded 2d array.
@@ -13,12 +16,12 @@ def unpad1d(self, padded_data):
     :param padded_data: array from `pad`
     :return: unpadded 2d array
     """
-    assert_built(self, "Padding not built. Please build this padding first")
 
     (x_slice,) = self.position
     return padded_data[x_slice]
 
 
+@requires_build_padding
 def unpad2d(self, padded_data):
     """
     Unpads the padded 3d array.
@@ -26,12 +29,12 @@ def unpad2d(self, padded_data):
     :param padded_data: array from `pad`
     :return: unpadded 3d array
     """
-    assert_built(self, "Padding not built. Please build this padding first")
 
     x_slice, y_slice = self.position
     return padded_data[y_slice, x_slice]
 
 
+@requires_build_padding
 def unpad3d(self, padded_data):
     """
     Unpads the padded 4d array.
@@ -39,12 +42,12 @@ def unpad3d(self, padded_data):
     :param padded_data: array from `pad`
     :return: unpadded 4d array
     """
-    assert_built(self, "Padding not built. Please build this padding first")
 
     x_slice, y_slice, z_slice = self.position
     return padded_data[z_slice, y_slice, x_slice]
 
 
+@requires_build_padding
 def slices1d(self):
     """
     Function returning 1 generator, producing slices along x-axis.
@@ -52,8 +55,6 @@ def slices1d(self):
 
     :return: x_slices_generator -> slice
     """
-    assert_built(self, "Padding not built. Please build this padding first")
-
     def x_slices_generator():
         # end + 1 to make it inclusive
         for start in range(self.start, self.end + 1, self.stride):
@@ -63,6 +64,7 @@ def slices1d(self):
     return x_slices_generator
 
 
+@requires_build_padding
 def slices2d(self):
     """
     Function returning 2 generators, producing slices
@@ -70,8 +72,6 @@ def slices2d(self):
 
     :return: x_slices_generator -> slice, y_slices_generator -> slice
     """
-    assert_built(self, "Padding not built. Please build this padding first")
-
     def x_slices_generator():
         for x_start in range(self.start[0], self.end[0] + 1, self.stride[0]):
             yield slice(x_start, x_start + self.kernel_size[0])
@@ -83,6 +83,7 @@ def slices2d(self):
     return x_slices_generator, y_slices_generator
 
 
+@requires_build_padding
 def slices3d(self):
     """
     Same as slices2d but produces slices on
@@ -94,8 +95,6 @@ def slices3d(self):
         z_slices_generator -> slice
     )
     """
-    assert_built(self, "Padding not built. Please build this padding first")
-
     def x_slices_generator():
         for x_start in range(self.start[0], self.end[0] + 1, self.stride[0]):
             yield slice(x_start, x_start + self.kernel_size[0])
@@ -148,8 +147,10 @@ class Padding(metaclass=SubclassDispatcherMeta):
         :param kernel_size: kernel size array
         :param stride: stride array
         """
-        self.kernel_size = kernel_size
-        self.stride = stride
+        # to match keras, for rectangular kernel / stride the shape is (y_kernel_size, x_kernel_size)
+        # but padding expects the reverse: (x, y)
+        self.kernel_size = kernel_size if isinstance(kernel_size, (int, np.integer)) else kernel_size[::-1]
+        self.stride = stride if isinstance(stride, (int, np.integer)) else stride[::-1]
         self.built = False
 
     def __repr__(self):
@@ -624,7 +625,7 @@ class Same1D(Same):
     unpad = unpad1d
 
 
-class Same2D(Padding):
+class Same2D(Same):
     def build(self, raw_data):
         """
         Adds a `processed_shape` attribute for creating zero
@@ -716,7 +717,7 @@ class Same2D(Padding):
     unpad = unpad2d
 
 
-class Same3D(Padding):
+class Same3D(Same):
     def build(self, raw_data):
         """
         Adds a `processed_shape` attribute for creating zero
@@ -844,7 +845,7 @@ class Valid(Padding):
     def build(self, raw_data):
         self.processed_shape = raw_data.shape
         # original position
-        self.position = tuple(slice(None) for _ in raw_data.shape)
+        self.position = tuple(slice(None) for _ in raw_data.shape[:-1])
         super().build(raw_data)
 
     def pad(self, raw_data):

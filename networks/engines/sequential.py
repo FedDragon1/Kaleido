@@ -20,7 +20,7 @@ from ..util import (
     assert_max_ndim,
     to_array_with_type,
     batches,
-    assert_not_empty, assert_built,
+    assert_not_empty, assert_built, requires_build,
 )
 
 
@@ -218,19 +218,19 @@ class Sequential:
         return tuple(self._layers)
 
     @property
+    @requires_build
     def input_shape(self):
-        assert_built(self, "Model not built, please build the model first")
         # Always pass a new array
         return self._input_shape.copy()
 
     @property
+    @requires_build
     def output_shape(self):
-        assert_built(self, "Model not built, please build the model first")
         return self._output_shape.copy()
 
     @cached_property
+    @requires_build
     def total_params(self):
-        assert_built(self, "Model not built, please build the model first")
         total_params = 0
         for layer in self.layers:
             total_params += layer.n_param
@@ -254,9 +254,8 @@ class Sequential:
         }
         return histories
 
+    @requires_build
     def summary(self):
-        assert_built(self, "Model not built, please build the model first")
-
         layer_summaries = []
 
         for i, layer in enumerate(self.layers, start=1):

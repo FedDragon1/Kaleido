@@ -4,7 +4,8 @@ from .paddings import Padding
 
 from ..core import Layer
 
-from ...util import assert_positive_int, assert_str, assert_ndim, assert_valid_stride, assert_valid_kernel_size
+from ...util import assert_positive_int, assert_str, assert_ndim, assert_valid_stride, assert_valid_kernel_size, \
+    requires_layer_build
 
 
 class Conv1D(Layer):
@@ -64,58 +65,25 @@ class Conv1D(Layer):
 
     def get_output(self, neurons):
         """
-        # TODO: Change documentation
-
         Convolve the input and return in the shape (output_length, num_kernel)
 
-        One way to think about this approach is to use sliding window analogy.
+        Using the sliding window strategy, first obtain all the segments to be convolved
+        which have the same shape as weights as a 3d array S.
+        S.shape -> (output_length, kernel_size, input_channels) -> ijk
 
-        (index starts at 1)
+        <latex name="S"></latex>
 
-              |-neuron[slice]-|
-        a[1]  a[2]  a[3]  a[4]  a[5]  a[6]      a[k]
-        ⎡a11⎤ ⎡a11⎤ ⎡a21⎤ ⎡a31⎤ ⎡a41⎤ ⎡a51⎤     ⎡ak1⎤
-        ⎥a12⎥ ⎥a12⎥ ⎥a22⎥ ⎥a32⎥ ⎥a42⎥ ⎥a52⎥ ... ⎥ak2⎥
-        ⎥ ⋮ ⎥ ⎥ ⋮ ⎥ ⎥ ⋮ ⎥ ⎥ ⋮ ⎥ ⎥ ⋮ ⎥ ⎥ ⋮ ⎥     ⎥ ⋮ ⎥
-        ⎣a1n⎦ ⎣a1n⎦ ⎣a2n⎦ ⎣a3n⎦ ⎣a4n⎦ ⎣a5n⎦     ⎣akn⎦
-        -----------------------------------------------
-              ⎡w1⎤  ⎡w1⎤  ⎡w1⎤
-              ⎥w2⎥  ⎥w2⎥  ⎥w2⎥
-              ⎥⋮ ⎥  ⎥⋮ ⎥  ⎥⋮ ⎥
-              ⎣wn⎦  ⎣wn⎦  ⎣wn⎦
-        #2    k11   k12   k13                                   ⎡z11⎤
-              |---kernel 1---|                                  ⎥z21⎥
-        z21 = k11 * a[2] + k12 * a[3] + k13 * a[4] + b[1]  =>   ⎥z31⎥, where L is last possible slide index
-                                                                ⎥ ⋮ ⎥
-                    ⎡w1⎤  ⎡w1⎤  ⎡w1⎤                            ⎣zL1⎦
-                    ⎥w2⎥  ⎥w2⎥  ⎥w2⎥
-                    ⎥⋮ ⎥  ⎥⋮ ⎥  ⎥⋮ ⎥
-                    ⎣wn⎦  ⎣wn⎦  ⎣wn⎦
-                    k11   k12   k13
-        #3          |---kernel 1---|
-        z31 = k11 * a[3] + k12 * a[4] + k13 * a[5] + b[1] = sum(kernel[1] * a[3:6]) + b[1]
-        -----------------------------------------------
-                    ⎡w1⎤  ⎡w1⎤  ⎡w1⎤
-                    ⎥w2⎥  ⎥w2⎥  ⎥w2⎥
-                    ⎥⋮ ⎥  ⎥⋮ ⎥  ⎥⋮ ⎥
-                    ⎣wn⎦  ⎣wn⎦  ⎣wn⎦
-        #3          k21   k22   k23                             ⎡z01⎤
-                    |---kernel 1---|                            ⎥z11⎥
-        z32 = k21 * a[3] + k22 * a[4] + k23 * a[5] + b[2]  =>   ⎥z21⎥, where L is last possible slide index
-                                                                ⎥ ⋮ ⎥
-                          ⎡w1⎤  ⎡w1⎤  ⎡w1⎤                      ⎣zL1⎦
-                          ⎥w2⎥  ⎥w2⎥  ⎥w2⎥
-                          ⎥⋮ ⎥  ⎥⋮ ⎥  ⎥⋮ ⎥
-                          ⎣wn⎦  ⎣wn⎦  ⎣wn⎦
-                          k10   k11   k12
-        #4                |---kernel 1---|
-        z42 = k21 * a[4] + k22 * a[5] + k23 * a[6] + b[2] = sum(kernel[1] * a[4:7]) + b[2]
-        -----------------------------------------------
-        After this process, the return value is (N = N filters):
-            ⎡z11 z12 ... z1N⎤
-            ⎥z21 z22 ... z2N⎥
-            ⎥ ⋮   ⋮   ⋱   ⋮ ⎥
-            ⎣zL1 zL2 ... zLN⎦
+        The `weights` array is also a 3d array W.
+        `W.shape` $\rightarrow$ `(kernel_size, input_channels, kernel_count)` `(jkl)`
+
+        <latex name="W"></latex>
+
+        The output array is a 2d array Z.
+        `Z.shape` $\rightarrow$ `(output_length, kernels_count)` `(il)`
+
+        Thus, the calculation of Z can be captured with this signature:
+
+        $${\rm ijk}, {\rm jkl} \rightarrow {\rm il}$$
 
         :param neurons: Exactly 2d array that have shape representing (sequence_length (L), #channel (N))
         :return: convolved neurons shape (seq_len, kernel_n)
@@ -129,16 +97,86 @@ class Conv1D(Layer):
         output = np.einsum("ijk, jkl -> il", self.conv_segments, self.weights) + self.biases
         return output
 
+    @requires_layer_build
     def backprop(self, gradients):
-        """
+        r"""
         Backpropagation for **this given data**
         Optimizers will handle the batch, this method should only be used internally
 
-        # TODO: Add documentation
-        # TODO: Add tests for this
+        ### Gradient of Output w.r.t Loss
 
-        :param gradients:
-        :return:
+        The parameter `gradients` passed from next layer represents the gradient $\frac{\partial C}{\partial z}$
+
+        $$\frac{\partial C}{\partial z} = \frac{\partial C}{\partial z}=\begin{bmatrix}
+        z_{1, 1} & z_{1, 2} & \cdots & z_{1, l} \\
+        z_{2, 1} & z_{2, 2} & \cdots & z_{2, l} \\
+        \vdots & \vdots & \ddots & \vdots \\
+        z_{i, 1} & z_{i, 2} & \cdots & z_{i, l} \\
+        \end{bmatrix}$$
+
+        where $i$ stands for output length and $l$ stands for kernel count.
+
+        > Notice that this is a 2D tensor `(il)` with shape `(output_length, kernel_count)`
+
+        ### Gradient w.r.t Weights
+
+        To calculate the gradient of loss w.r.t the weight, we need to find $\frac{\partial z}{\partial w}$.
+
+        $$\frac{\partial z}{\partial w}=\begin{bmatrix}
+        a_1 & a_2 & \cdots & a_j \\
+        a_{1+s} & a_{2+s} & \cdots & a_{j+s} \\
+        \vdots & \vdots & \ddots & \vdots \\
+        a_{1+is} & a_{2+is} & \cdots & a_{j+is}
+        \end{bmatrix}$$
+
+        where $s$ stands for stride, $i$ stands for output length, and $j$ stands for kernel size.
+
+        > Notice that this is a 3D tensor `(ijk)`, with shape `(output_length, kernel_size, input_channels)`,
+        > and it is exactly `self.conv_segments`.
+
+        Then, by multiplying $\frac{\partial z}{\partial w}$ and $\frac{\partial C}{\partial z}$ together,
+        results in a tensor with same shape as weight `(jkl)` `(kernel_size, input_channels, output_channel)`.
+
+        $$\rm ijk,il\rightarrow jkl$$
+
+        Thus, $\frac{\partial C}{\partial w}$ can be evaluated with the following code:
+        ```np.einsum("ijk, il -> jkl", self.conv_segments, gradients)```
+
+        ### Gradient w.r.t Biases
+
+        For each channel there is a single bias associated with it. Thus, the shape of bias is `(l)` `(kernel_count)`.
+
+        The gradient, $\frac{\partial C}{\partial z}$, has a shape `(il)` `(output_length, kernel_count)`.
+
+        Then the gradient of loss w.r.t the bias can be calculated as $\rm il\rightarrow l$. Effectively the same as
+        summing all the elements along the axis of `output_length`.
+
+        Thus, $\frac{\partial C}{\partial b}$ can be calculated with the following code:
+        ```np.sum(gradients, axis=0)```
+
+        ### Gradient w.r.t Input Neurons
+
+        To calculate the gradient of loss w.r.t the input, we need to find $\frac{\partial z}{\partial a^{(p)}}$
+        (Padded input neuron).
+
+        This tensor is computed by method `get_dzda_tensor`. The return value of this method is a 4D tensor `(ijkl)`
+        with shape `(output_length, padded_input_length, input_channels, num_filters)`
+
+        > Notice that `padded_input_length` must be used. Since the convolution operation is performed based on
+        > the padded tensor not the input tensor.
+
+        Then, by multiplying $\frac{\partial z}{\partial a^{(p)}}$ and $\frac{\partial C}{\partial z}$ together,
+        results in a tensor with same shape as weight `(jk)` `(padded_input_length, input_channels)`.
+
+        $$\rm ijkl,il\rightarrow jk$$
+
+        Thus, $\frac{\partial C}{\partial a^{(p)}$ can be evaluated with the following code:
+        ```np.einsum("ijkl, il -> jk", self.get_dzda_tensor(), gradients)```
+
+        Lastly, unpad $\frac{\partial C}{\partial a^{(p)}}$ to get $\frac{\partial C}{\partial a}$
+
+        :param gradients: $\frac{\partial C}{\partial z}$
+        :return: None
         """
 
         # A mimic of dot product for higher order tensors.
@@ -146,13 +184,7 @@ class Conv1D(Layer):
         # w.r.t one filter of weights. It has to be transposed
         # in order to join calculation. This idea of transposing
         # is captured in einsum.
-        nabla_w = np.einsum("ijk, ik -> jk", self.conv_segments, gradients)
-
-        # Notice now `nabla_w` is only one of the Jacobians for one
-        # filter. However, all the filters share the same Jacobian.
-        # Instead of stacking the same array, create a new axis,
-        # as numpy will broadcast the arrays.
-        nabla_w = nabla_w[:, :, None]
+        nabla_w = np.einsum("ijk, il -> jkl", self.conv_segments, gradients)
 
         nabla_b = np.sum(gradients, axis=0)
 
@@ -169,16 +201,19 @@ class Conv1D(Layer):
         trainable = {"weights": nabla_w, "biases": nabla_b}
         return trainable, nabla_a
 
+    @requires_layer_build
     def get_dzda_tensor(self):
         """
-        Generates a 4D array `(output_len, input_len, num_channels, kernel_count)`
+        Generates a 4D array `(output_len, pad_input_len, num_channels, kernel_count)`
         that is used internally to calculate the gradient w.r.t the input neurons.
 
         :return: 4d array (output_len, input_len, num_channels, kernel_count)
         """
-        dzda = np.zeros((self.output_shape[0], *self.input_shape, self.kernel_count))
+        dzda = np.zeros((self.output_shape[0], *self.padding.processed_shape, self.kernel_count))
 
-        for output_n, x_slice in enumerate(self.padding.slices()):
+        x_slices = self.padding.slices()
+
+        for output_n, x_slice in enumerate(x_slices()):
             dzda[output_n, x_slice] = self.weights
 
         return dzda
